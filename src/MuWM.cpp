@@ -8,7 +8,6 @@
 #include <csignal>
 #include <unistd.h>
 
-
 MuWM::MuWM(const argparse::ArgumentParser &parser) : m_parser(parser)
 {
     initLua();
@@ -507,15 +506,13 @@ MuWM::scheduleApply(int changes)
 
     // Deferred so several writes (e.g. a whole-table assignment) cause one
     // relayout, and so it never runs in the middle of a Lua call.
-    m_applyIdle = wl_event_loop_add_idle(
-        wl_display_get_event_loop(m_display),
-        [](void *data)
+    m_applyIdle = wl_event_loop_add_idle(wl_display_get_event_loop(m_display),
+                                         [](void *data)
     {
         auto *wm        = static_cast<MuWM *>(data);
         wm->m_applyIdle = nullptr; // idle sources are freed once they fire
         wm->applyPending();
-    },
-        this);
+    }, this);
 }
 
 void

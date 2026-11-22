@@ -9,7 +9,6 @@
 
 #include <vector>
 
-
 class MuWM;
 
 struct OutputListener
@@ -114,6 +113,6 @@ private:
 
     void applyPending();
     void recolorBorders();
-    int m_pendingChanges          = ChangeNone;
+    int m_pendingChanges         = ChangeNone;
     wl_event_source *m_applyIdle = nullptr;
 };

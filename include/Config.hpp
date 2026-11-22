@@ -4,7 +4,6 @@
 
 #include <string>
 
-
 struct Config
 {
     int gap = 10;

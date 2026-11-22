@@ -26,7 +26,7 @@ struct Field
     const char *name;
     void *ptr        = nullptr; // int*, float[4], or Group*
     lua_CFunction fn = nullptr;
-    int changes      = 0;       // MuWM::Change flags to apply after a write
+    int changes      = 0; // MuWM::Change flags to apply after a write
     int min          = INT_MIN;
     int max          = INT_MAX;
 };
@@ -192,7 +192,8 @@ pushColor(lua_State *L, const float c[4])
     }
 }
 
-void pushProxy(lua_State *L, const Group *g);
+void
+pushProxy(lua_State *L, const Group *g);
 
 int
 proxyIndex(lua_State *L)
@@ -243,7 +244,7 @@ pushProxy(lua_State *L, const Group *g)
     lua_setmetatable(L, -2);
 }
 
-}
+} // namespace
 
 void
 MuWM::initLua()
@@ -290,14 +291,20 @@ MuWM::initLuaBindings()
     static Group m_rootGroup, m_optsGroup, m_borderGroup;
 
     m_borderGroup.fields = {
-        {Field::Int, "width", &m_config.border.width, nullptr, MuWM::ChangeLayout, 0, 1000},
-        {Field::Color, "focused", m_config.border.focused_color, nullptr, MuWM::ChangeRecolor},
-        {Field::Color, "unfocused", m_config.border.unfocused_color, nullptr, MuWM::ChangeRecolor},
+        {Field::Int, "width", &m_config.border.width, nullptr,
+         MuWM::ChangeLayout, 0, 1000},
+        {Field::Color, "focused", m_config.border.focused_color, nullptr,
+         MuWM::ChangeRecolor},
+        {Field::Color, "unfocused", m_config.border.unfocused_color, nullptr,
+         MuWM::ChangeRecolor},
     };
+
     m_optsGroup.fields = {
-        {Field::Int, "gap", &m_config.gap, nullptr, MuWM::ChangeLayout, 0, 1000},
+        {Field::Int, "gap", &m_config.gap, nullptr, MuWM::ChangeLayout, 0,
+         1000},
         {Field::Sub, "border", &m_borderGroup},
     };
+
     m_rootGroup.fields = {
         {Field::Sub, "opts", &m_optsGroup},
         {Field::Func, "spawn", nullptr,
