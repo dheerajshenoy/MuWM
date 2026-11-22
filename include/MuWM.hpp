@@ -9,6 +9,7 @@
 
 #include <vector>
 
+
 class MuWM;
 
 struct OutputListener
@@ -35,6 +36,14 @@ public:
     void addToplevel(Toplevel *t);
     void removeToplevel(Toplevel *t);
     void arrange();
+
+    enum Change
+    {
+        ChangeNone    = 0,
+        ChangeLayout  = 1 << 0, // gaps, border width
+        ChangeRecolor = 1 << 1, // border colors
+    };
+    void scheduleApply(int changes);
     bool handleKeybinding(xkb_keysym_t sym);
     wlr_seat *seat() const
     {
@@ -102,4 +111,9 @@ private:
     std::vector<Toplevel *> m_toplevels;
 
     lua_State *m_lua = nullptr;
+
+    void applyPending();
+    void recolorBorders();
+    int m_pendingChanges          = ChangeNone;
+    wl_event_source *m_applyIdle = nullptr;
 };

@@ -45,6 +45,7 @@ add_custom_target(protocols DEPENDS ${XDG_HDR} ${DECO_HDR})   # replaces the old
 add_executable(${PROJECT_NAME}
     src/main.cpp
     src/MuWM.cpp
+    src/Lua.cpp
     src/Output.cpp
     src/Toplevel.cpp
     src/Keyboard.cpp

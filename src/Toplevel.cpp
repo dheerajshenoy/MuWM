@@ -37,15 +37,14 @@ Toplevel::onDestroy(void *)
 void
 Toplevel::resizeBorders(int w, int h)
 {
-    int b = wm->config().border.width;
-    b     = 10;
-    wlr_scene_rect_set_size(border[0], w + 2 * b, b); // top
+    const int b = wm->config().border.width;
+    wlr_scene_rect_set_size(border[0], w + 2 * b, b);
     wlr_scene_node_set_position(&border[0]->node, -b, -b);
-    wlr_scene_rect_set_size(border[1], w + 2 * b, b); // bottom
+    wlr_scene_rect_set_size(border[1], w + 2 * b, b);
     wlr_scene_node_set_position(&border[1]->node, -b, h);
-    wlr_scene_rect_set_size(border[2], b, h); // left
+    wlr_scene_rect_set_size(border[2], b, h);
     wlr_scene_node_set_position(&border[2]->node, -b, 0);
-    wlr_scene_rect_set_size(border[3], b, h); // right
+    wlr_scene_rect_set_size(border[3], b, h);
     wlr_scene_node_set_position(&border[3]->node, w, 0);
 }
 

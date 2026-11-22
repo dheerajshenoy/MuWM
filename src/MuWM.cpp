@@ -8,17 +8,6 @@
 #include <csignal>
 #include <unistd.h>
 
-// std::filesystem doesn't expand "~", so resolve the path ourselves.
-static std::filesystem::path
-configFilePath()
-{
-    if (const char *xdg = getenv("XDG_CONFIG_HOME"); xdg && *xdg)
-        return std::filesystem::path(xdg) / PROJECT_NAME / "init.lua";
-    if (const char *home = getenv("HOME"); home && *home)
-        return std::filesystem::path(home) / ".config" / PROJECT_NAME
-               / "init.lua";
-    return {};
-}
 
 MuWM::MuWM(const argparse::ArgumentParser &parser) : m_parser(parser)
 {
@@ -28,6 +17,9 @@ MuWM::MuWM(const argparse::ArgumentParser &parser) : m_parser(parser)
 
 MuWM::~MuWM()
 {
+    if (m_applyIdle)
+        wl_event_source_remove(m_applyIdle);
+
     if (m_display)
         wl_display_destroy_clients(m_display);
 
@@ -90,7 +82,6 @@ MuWM::init()
         return false;
     }
 
-    // Quit cleanly (same path as Alt+Q) on SIGINT/SIGTERM.
     for (int sig : {SIGINT, SIGTERM})
         wl_event_loop_add_signal(wl_display_get_event_loop(m_display), sig,
                                  [](int, void *d)
@@ -221,7 +212,7 @@ MuWM::run(const std::string &startupCmd)
         return false;
 
     setenv("WAYLAND_DISPLAY", socket, 1);
-    signal(SIGCHLD, SIG_IGN); // don't leave zombie processes behind
+    signal(SIGCHLD, SIG_IGN);
     wlr_log(WLR_INFO, "Running on WAYLAND_DISPLAY=%s", socket);
 
     loadConfig();
@@ -252,7 +243,7 @@ MuWM::handleNewToplevel(wlr_xdg_toplevel *xdg)
     t->map.bind<&Toplevel::onMap>(&xdg->base->surface->events.map, t);
     t->commit.bind<&Toplevel::onCommit>(&xdg->base->surface->events.commit, t);
     t->destroy.bind<&Toplevel::onDestroy>(&xdg->events.destroy, t);
-    t->tree->node.data = t; // new line, after tree is created
+    t->tree->node.data = t;
     t->unmap.bind<&Toplevel::onUnmap>(&xdg->base->surface->events.unmap, t);
 }
 
@@ -284,7 +275,6 @@ MuWM::handleNewInput(wlr_input_device *device)
     wlr_keyboard_set_repeat_info(kb, 25, 600);
     wlr_seat_set_keyboard(m_seat, kb);
 
-    // If a window mapped before any keyboard existed, give it focus now.
     if (m_focused && !m_seat->keyboard_state.focused_surface)
         wlr_seat_keyboard_notify_enter(m_seat, m_focused->xdg->base->surface,
                                        kb->keycodes, kb->num_keycodes,
@@ -407,7 +397,6 @@ MuWM::toplevelAt(double x, double y, wlr_surface **surface, double *sx,
         return nullptr;
     *surface = ss->surface;
 
-    // walk up the tree until we find the node tagged with a Toplevel
     wlr_scene_tree *tree = node->parent;
     while (tree && !tree->node.data)
         tree = tree->node.parent;
@@ -484,7 +473,7 @@ MuWM::spawn(const std::string &cmd)
 {
     if (fork() == 0)
     {
-        setsid(); // detach from our process group
+        setsid();
         execl("/bin/sh", "sh", "-c", cmd.c_str(), nullptr);
         _exit(1);
     }
@@ -506,62 +495,45 @@ MuWM::onNewDecoration(void *data)
     d->commit.bind<&Decoration::onCommit>(
         &d->deco->toplevel->base->surface->events.commit, d);
     d->destroy.bind<&Decoration::onDestroy>(&d->deco->events.destroy, d);
-    d->onRequestMode(nullptr); // apply right away if already initialized
+    d->onRequestMode(nullptr);
 }
 
 void
-MuWM::initLua()
+MuWM::scheduleApply(int changes)
 {
-    m_lua = luaL_newstate();
-    if (!m_lua)
+    m_pendingChanges |= changes;
+    if (m_applyIdle || !m_display)
+        return;
+
+    // Deferred so several writes (e.g. a whole-table assignment) cause one
+    // relayout, and so it never runs in the middle of a Lua call.
+    m_applyIdle = wl_event_loop_add_idle(
+        wl_display_get_event_loop(m_display),
+        [](void *data)
     {
-        wlr_log(WLR_ERROR, "Failed to create Lua state");
-        return;
-    }
-
-    luaL_openlibs(m_lua);
-
-    initLuaBindings();
-}
-
-// Runs the user's config. Must happen after the socket exists and
-// WAYLAND_DISPLAY is set, so that muwm.spawn() clients can connect.
-void
-MuWM::loadConfig()
-{
-    if (!m_lua)
-        return;
-
-    const auto path = configFilePath();
-    if (path.empty() || !std::filesystem::exists(path))
-        return;
-
-    if (luaL_dofile(m_lua, path.c_str()) != LUA_OK)
-    {
-        wlr_log(WLR_ERROR, "Failed to load Lua config: %s",
-                lua_tostring(m_lua, -1));
-        lua_pop(m_lua, 1);
-        return;
-    }
-    wlr_log(WLR_INFO, "Lua config loaded from %s", path.c_str());
+        auto *wm        = static_cast<MuWM *>(data);
+        wm->m_applyIdle = nullptr; // idle sources are freed once they fire
+        wm->applyPending();
+    },
+        this);
 }
 
 void
-MuWM::initLuaBindings()
+MuWM::applyPending()
 {
-    // muwm
-    lua_newtable(m_lua);
+    const int changes = m_pendingChanges;
+    m_pendingChanges  = ChangeNone;
+    wlr_log(WLR_DEBUG, "Applying config changes (flags 0x%x)", changes);
 
-    // muwm.spawn(cmd)
-    // The compositor pointer is passed to the callback as an upvalue.
-    lua_pushlightuserdata(m_lua, this);
-    lua_pushcclosure(m_lua, [](lua_State *L) -> int
-    {
-        auto *wm = static_cast<MuWM *>(lua_touserdata(L, lua_upvalueindex(1)));
-        const char *cmd = luaL_checkstring(L, 1);
-        wm->spawn(cmd);
-        return 0;
-    }, 1);
-    lua_setfield(m_lua, -2, "spawn");
-    lua_setglobal(m_lua, "muwm");
+    if (changes & ChangeLayout)
+        arrange();
+    if (changes & ChangeRecolor)
+        recolorBorders();
+}
+
+void
+MuWM::recolorBorders()
+{
+    for (Toplevel *t : m_toplevels)
+        t->setFocused(t == m_focused);
 }

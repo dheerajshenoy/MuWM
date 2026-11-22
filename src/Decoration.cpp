@@ -7,7 +7,6 @@ Decoration::onRequestMode(void *)
     // wlroots; the initial commit (onCommit) applies the mode in that case.
     if (!deco->toplevel->base->initialized)
         return;
-    // always answer "server side", whatever the client asked for
     wlr_xdg_toplevel_decoration_v1_set_mode(
         deco, WLR_XDG_TOPLEVEL_DECORATION_V1_MODE_SERVER_SIDE);
 }

@@ -1,6 +1,10 @@
 #pragma once
 
-#include <cstdint>
+#include "lua.hpp"
+
+#include <string>
+
+
 struct Config
 {
     int gap = 10;

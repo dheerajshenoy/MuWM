@@ -22,5 +22,5 @@ void
 Output::onRequestState(void *data)
 {
     auto *ev = static_cast<wlr_output_event_request_state *>(data);
-    wlr_output_commit_state(output, ev->state); // accept the backend's new size
+    wlr_output_commit_state(output, ev->state);
 }
