@@ -13,6 +13,12 @@ extern "C"
 #include <wlr/types/wlr_data_device.h>
 #include <wlr/types/wlr_input_device.h>
 #include <wlr/types/wlr_keyboard.h>
+// `namespace` is a C++ keyword but the layer-shell headers use it as a name
+// (struct member and parameter); rename it for this include only. In C++ code
+// the member is therefore `layer_surface->namespace_`.
+#define namespace namespace_
+#include <wlr/types/wlr_layer_shell_v1.h>
+#undef namespace
 #include <wlr/types/wlr_output.h>
 #include <wlr/types/wlr_output_layout.h>
 #include <wlr/types/wlr_pointer.h>

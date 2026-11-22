@@ -12,6 +12,7 @@
 #include <vector>
 
 class MuWM;
+struct LayerShellSurface;
 
 struct OutputListener
 {
@@ -54,6 +55,12 @@ public:
         ChangeRecolor = 1 << 1, // border colors
     };
     void scheduleApply(int changes);
+
+    // layer-shell
+    void arrangeLayers(wlr_output *output);
+    void moveLayerSurface(LayerShellSurface *s);
+    void removeLayerShellSurface(LayerShellSurface *s);
+    void closeLayerSurfacesOn(wlr_output *output);
     bool handleKeybinding(uint32_t mods, xkb_keysym_t sym);
     wlr_seat *seat() const
     {
@@ -89,6 +96,7 @@ private:
     void onCursorFrame(void *data);
     void onLayoutChange(void *data);
     void onNewDecoration(void *data);
+    void onNewLayerShellSurface(void *data);
 
     void initLua();
     void initLuaBindings();
@@ -109,6 +117,7 @@ private:
     wlr_cursor *m_cursor                         = nullptr;
     wlr_xcursor_manager *m_xcursor               = nullptr;
     wlr_xdg_decoration_manager_v1 *m_decoManager = nullptr;
+    wlr_layer_shell_v1 *m_layerShell             = nullptr;
     Toplevel *m_focused                          = nullptr;
 
     OutputListener m_outputListener;
@@ -120,11 +129,18 @@ private:
     Listener<MuWM> m_cursorFrame;
     Listener<MuWM> m_newInput;
     Listener<MuWM> m_newToplevel;
+    Listener<MuWM> m_newLayerShellSurface;
     Listener<MuWM> m_layoutChange;
     Listener<MuWM> m_newDecoration;
 
     Config m_config;
     std::vector<Toplevel *> m_toplevels;
+    std::vector<LayerShellSurface *> m_layerSurfaces;
+
+    // Stacking order, bottom to top: background, bottom, windows, top, overlay.
+    // The four layer trees are indexed by zwlr_layer_shell_v1_layer.
+    wlr_scene_tree *m_layerTrees[4] = {};
+    wlr_scene_tree *m_windowTree    = nullptr;
 
     lua_State *m_lua = nullptr;
 

@@ -60,6 +60,7 @@ add_executable(${PROJECT_NAME}
     src/Output.cpp
     src/Toplevel.cpp
     src/Keyboard.cpp
+    src/LayerShellSurface.cpp
     src/Decoration.cpp
     src/EventBus.cpp
 )

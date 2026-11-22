@@ -2,6 +2,7 @@
 
 #include "Decoration.hpp"
 #include "Keyboard.hpp"
+#include "LayerShellSurface.hpp"
 #include "Output.hpp"
 #include "Toplevel.hpp"
 
@@ -23,6 +24,7 @@ MuWM::~MuWM()
         wl_display_destroy_clients(m_display);
 
     m_newToplevel.unbind();
+    m_newLayerShellSurface.unbind();
     m_newInput.unbind();
     m_newDecoration.unbind();
     m_layoutChange.unbind();
@@ -138,6 +140,17 @@ MuWM::init()
 
     m_sceneLayout = wlr_scene_attach_output_layout(m_scene, m_layout);
 
+    // Children stack in creation order, so this fixes the layer ordering.
+    m_layerTrees[ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND]
+        = wlr_scene_tree_create(&m_scene->tree);
+    m_layerTrees[ZWLR_LAYER_SHELL_V1_LAYER_BOTTOM]
+        = wlr_scene_tree_create(&m_scene->tree);
+    m_windowTree = wlr_scene_tree_create(&m_scene->tree);
+    m_layerTrees[ZWLR_LAYER_SHELL_V1_LAYER_TOP]
+        = wlr_scene_tree_create(&m_scene->tree);
+    m_layerTrees[ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY]
+        = wlr_scene_tree_create(&m_scene->tree);
+
     wlr_compositor_create(m_display, 5, m_renderer);
     wlr_subcompositor_create(m_display);
     wlr_data_device_manager_create(m_display);
@@ -175,6 +188,11 @@ MuWM::init()
     m_newDecoration.bind<&MuWM::onNewDecoration>(
         &m_decoManager->events.new_toplevel_decoration, this);
 
+    m_layerShell = wlr_layer_shell_v1_create(m_display, 4);
+
+    m_newLayerShellSurface.bind<&MuWM::onNewLayerShellSurface>(
+        &m_layerShell->events.new_surface, this);
+
     return true;
 }
 
@@ -193,6 +211,7 @@ MuWM::handleNewOutput(wlr_output *output)
 
     auto *o            = new Output{this, output};
     o->sceneOutput     = wlr_scene_output_create(m_scene, output);
+    output->data       = o;
     auto *layoutOutput = wlr_output_layout_add_auto(m_layout, output);
     wlr_scene_output_layout_add_output(m_sceneLayout, layoutOutput,
                                        o->sceneOutput);
@@ -242,7 +261,7 @@ void
 MuWM::handleNewToplevel(wlr_xdg_toplevel *xdg)
 {
     auto *t = new Toplevel{this, xdg};
-    t->tree = wlr_scene_xdg_surface_create(&m_scene->tree, xdg->base);
+    t->tree = wlr_scene_xdg_surface_create(m_windowTree, xdg->base);
 
     for (auto &r : t->border)
         r = wlr_scene_rect_create(t->tree, 1, 1,
@@ -546,6 +565,92 @@ MuWM::onNewDecoration(void *data)
         &d->deco->toplevel->base->surface->events.commit, d);
     d->destroy.bind<&Decoration::onDestroy>(&d->deco->events.destroy, d);
     d->onRequestMode(nullptr);
+}
+
+void
+MuWM::onNewLayerShellSurface(void *data)
+{
+    auto *ls = static_cast<wlr_layer_surface_v1 *>(data);
+
+    // The client may leave the output unspecified; the compositor must pick.
+    if (!ls->output)
+        ls->output = wlr_output_layout_get_center_output(m_layout);
+    if (!ls->output)
+    {
+        wlr_log(WLR_ERROR, "Layer surface with no output available");
+        wlr_layer_surface_v1_destroy(ls);
+        return;
+    }
+
+    auto *s         = new LayerShellSurface{};
+    s->wm           = this;
+    s->layerSurface = ls;
+    s->scene = wlr_scene_layer_surface_v1_create(
+        m_layerTrees[ls->pending.layer], ls);
+
+    s->map.bind<&LayerShellSurface::onMap>(&ls->surface->events.map, s);
+    s->unmap.bind<&LayerShellSurface::onUnmap>(&ls->surface->events.unmap, s);
+    s->commit.bind<&LayerShellSurface::onCommit>(&ls->surface->events.commit,
+                                                 s);
+    s->destroy.bind<&LayerShellSurface::onDestroy>(&ls->events.destroy, s);
+
+    m_layerSurfaces.push_back(s);
+}
+
+void
+MuWM::moveLayerSurface(LayerShellSurface *s)
+{
+    wlr_scene_node_reparent(&s->scene->tree->node,
+                            m_layerTrees[s->layerSurface->current.layer]);
+}
+
+void
+MuWM::removeLayerShellSurface(LayerShellSurface *s)
+{
+    std::erase(m_layerSurfaces, s);
+    if (s->layerSurface->output && s->layerSurface->output->data)
+        arrangeLayers(s->layerSurface->output);
+}
+
+void
+MuWM::closeLayerSurfacesOn(wlr_output *output)
+{
+    // The protocol requires closing surfaces whose output goes away. Their
+    // destroy handlers edit the list, so iterate over a copy.
+    const auto surfaces = m_layerSurfaces;
+    for (LayerShellSurface *s : surfaces)
+        if (s->layerSurface->output == output)
+            wlr_layer_surface_v1_destroy(s->layerSurface);
+}
+
+// Positions every layer surface of `output` and records what area is left
+// over for windows. Surfaces with an exclusive zone (bars) go first so that
+// the others are laid out in the remaining space; higher layers win ties.
+void
+MuWM::arrangeLayers(wlr_output *wlrOutput)
+{
+    if (!wlrOutput || !wlrOutput->data)
+        return;
+    auto *output = static_cast<Output *>(wlrOutput->data);
+
+    wlr_box full;
+    wlr_output_layout_get_box(m_layout, wlrOutput, &full);
+    wlr_box usable = full;
+
+    for (bool exclusive : {true, false})
+        for (int layer = ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY;
+             layer >= ZWLR_LAYER_SHELL_V1_LAYER_BACKGROUND; layer--)
+            for (LayerShellSurface *s : m_layerSurfaces)
+            {
+                wlr_layer_surface_v1 *ls = s->layerSurface;
+                if (ls->output != wlrOutput
+                    || static_cast<int>(ls->current.layer) != layer
+                    || (ls->current.exclusive_zone > 0) != exclusive)
+                    continue;
+                wlr_scene_layer_surface_v1_configure(s->scene, &full, &usable);
+            }
+
+    output->usableArea = usable;
 }
 
 void

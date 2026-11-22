@@ -1,5 +1,7 @@
 #include "Output.hpp"
 
+#include "MuWM.hpp"
+
 void
 Output::onFrame(void *)
 {
@@ -12,6 +14,8 @@ Output::onFrame(void *)
 void
 Output::onDestroy(void *)
 {
+    wm->closeLayerSurfacesOn(output);
+    output->data = nullptr;
     frame.unbind();
     requestState.unbind();
     destroy.unbind();
