@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Binding.hpp"
 #include "Config.hpp"
 #include "Listener.hpp"
 #include "Toplevel.hpp"
@@ -35,6 +36,15 @@ public:
     void addToplevel(Toplevel *t);
     void removeToplevel(Toplevel *t);
     void arrange();
+    void loadConfig();
+    void quit();
+
+    // Window
+    void focusNext();
+    void focusPrev();
+    void swapNext();
+    void swapPrev();
+    void close();
 
     enum Change
     {
@@ -43,7 +53,7 @@ public:
         ChangeRecolor = 1 << 1, // border colors
     };
     void scheduleApply(int changes);
-    bool handleKeybinding(xkb_keysym_t sym);
+    bool handleKeybinding(uint32_t mods, xkb_keysym_t sym);
     wlr_seat *seat() const
     {
         return m_seat;
@@ -53,6 +63,9 @@ public:
                          double *sy);
     void processMotion(uint32_t timeMsec);
     void spawn(const std::string &cmd);
+
+    void addBinding(Binding b);
+    void clearBindings();
 
     const Config &config() const
     {
@@ -74,7 +87,6 @@ private:
 
     void initLua();
     void initLuaBindings();
-    void loadConfig();
 
 private:
     bool m_ok = false;
@@ -115,4 +127,6 @@ private:
     void recolorBorders();
     int m_pendingChanges         = ChangeNone;
     wl_event_source *m_applyIdle = nullptr;
+
+    std::vector<Binding> m_keybindings;
 };

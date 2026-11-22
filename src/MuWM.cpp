@@ -207,14 +207,18 @@ MuWM::run(const std::string &startupCmd)
     const char *socket = wl_display_add_socket_auto(m_display);
     if (!socket)
         return false;
-    if (!wlr_backend_start(m_backend))
-        return false;
 
     setenv("WAYLAND_DISPLAY", socket, 1);
     signal(SIGCHLD, SIG_IGN);
     wlr_log(WLR_INFO, "Running on WAYLAND_DISPLAY=%s", socket);
 
+    // The config must be loaded before the backend starts: starting it
+    // announces the existing keyboards, whose keymap is built from the config.
+    // The socket already exists, so clients spawned by the config can connect.
     loadConfig();
+
+    if (!wlr_backend_start(m_backend))
+        return false;
 
     if (!startupCmd.empty())
         spawn(startupCmd);
@@ -266,12 +270,38 @@ MuWM::handleNewInput(wlr_input_device *device)
     wlr_keyboard *kb = wlr_keyboard_from_input_device(device);
 
     xkb_context *ctx = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
+
+    const auto &kc = m_config.keyboard;
+    auto opt       = [](const std::string &s)
+    {
+        return s.empty() ? nullptr : s.c_str();
+    };
+
+    xkb_rule_names names = {};
+    names.rules          = opt(kc.rules);
+    names.model          = opt(kc.model);
+    names.layout         = opt(kc.layout);
+    names.variant        = opt(kc.variant);
+    names.options        = opt(kc.xkb_options);
+
     xkb_keymap *km
-        = xkb_keymap_new_from_names(ctx, nullptr, XKB_KEYMAP_COMPILE_NO_FLAGS);
+        = xkb_keymap_new_from_names(ctx, &names, XKB_KEYMAP_COMPILE_NO_FLAGS);
+    if (!km)
+    {
+        wlr_log(WLR_ERROR,
+                "invalid keyboard layout/variant; using system defaults");
+        km = xkb_keymap_new_from_names(ctx, nullptr,
+                                       XKB_KEYMAP_COMPILE_NO_FLAGS);
+    }
+    wlr_log(WLR_DEBUG, "keyboard %s: layout=%s variant=%s options=%s",
+            device->name, kc.layout.c_str(), kc.variant.c_str(),
+            kc.xkb_options.c_str());
     wlr_keyboard_set_keymap(kb, km);
     xkb_keymap_unref(km);
     xkb_context_unref(ctx);
-    wlr_keyboard_set_repeat_info(kb, 25, 600);
+    wlr_keyboard_set_repeat_info(
+        kb, kc.repeat_rate, kc.repeat_delay); // replaces the hardcoded 25, 600
+
     wlr_seat_set_keyboard(m_seat, kb);
 
     if (m_focused && !m_seat->keyboard_state.focused_surface)
@@ -286,16 +316,24 @@ MuWM::handleNewInput(wlr_input_device *device)
 }
 
 bool
-MuWM::handleKeybinding(xkb_keysym_t sym)
+MuWM::handleKeybinding(uint32_t mods, xkb_keysym_t sym)
 {
-    switch (sym)
+    sym = xkb_keysym_to_lower(sym);
+    for (const Binding &b : m_keybindings)
     {
-        case XKB_KEY_q:
-            wl_display_terminate(m_display);
-            return true;
-        default:
-            return false;
+        if (b.mods != mods || b.sym != sym)
+            continue;
+
+        lua_rawgeti(m_lua, LUA_REGISTRYINDEX,
+                    b.ref); // read b.ref *before* calling:
+        if (lua_pcall(m_lua, 0, 0, 0) != LUA_OK)
+        { // a callback may add bindings
+            wlr_log(WLR_ERROR, "keybinding: %s", lua_tostring(m_lua, -1));
+            lua_pop(m_lua, 1);
+        }
+        return true;
     }
+    return false;
 }
 
 void
@@ -533,4 +571,98 @@ MuWM::recolorBorders()
 {
     for (Toplevel *t : m_toplevels)
         t->setFocused(t == m_focused);
+}
+
+void
+MuWM::addBinding(Binding b)
+{
+    for (Binding &existing : m_keybindings)
+        if (existing.mods == b.mods && existing.sym == b.sym)
+        {
+            luaL_unref(m_lua, LUA_REGISTRYINDEX, existing.ref);
+            wlr_log(WLR_INFO, "Replacing keybinding for sym 0x%x", b.sym);
+            existing.ref = b.ref;
+            return;
+        }
+    m_keybindings.push_back(b);
+}
+
+void
+MuWM::clearBindings()
+{
+    wlr_log(WLR_DEBUG, "Clearing %zu keybindings", m_keybindings.size());
+    for (const Binding &b : m_keybindings)
+        luaL_unref(m_lua, LUA_REGISTRYINDEX, b.ref);
+    m_keybindings.clear();
+}
+
+void
+MuWM::quit()
+{
+    wl_display_terminate(m_display);
+}
+
+void
+MuWM::focusNext()
+{
+    for (size_t i = 0; i < m_toplevels.size(); i++)
+    {
+        if (m_toplevels[i] == m_focused)
+        {
+            focusToplevel(m_toplevels[(i + 1) % m_toplevels.size()]);
+            return;
+        }
+    }
+}
+
+void
+MuWM::focusPrev()
+{
+    for (size_t i = 0; i < m_toplevels.size(); i++)
+    {
+        if (m_toplevels[i] == m_focused)
+        {
+            focusToplevel(
+                m_toplevels[(i + m_toplevels.size() - 1) % m_toplevels.size()]);
+            return;
+        }
+    }
+}
+
+void
+MuWM::swapNext()
+{
+    for (size_t i = 0; i < m_toplevels.size(); i++)
+    {
+        if (m_toplevels[i] == m_focused)
+        {
+            std::swap(m_toplevels[i],
+                      m_toplevels[(i + 1) % m_toplevels.size()]);
+            arrange();
+            return;
+        }
+    }
+}
+
+void
+MuWM::swapPrev()
+{
+    for (size_t i = 0; i < m_toplevels.size(); i++)
+    {
+        if (m_toplevels[i] == m_focused)
+        {
+            std::swap(
+                m_toplevels[i],
+                m_toplevels[(i + m_toplevels.size() - 1) % m_toplevels.size()]);
+            arrange();
+            return;
+        }
+    }
+}
+
+void
+MuWM::close()
+{
+    if (m_focused)
+        wlr_xdg_toplevel_send_close(m_focused->xdg);
 }

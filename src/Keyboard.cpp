@@ -2,21 +2,46 @@
 
 #include "MuWM.hpp"
 
+namespace
+{
+constexpr uint32_t kBindMask = WLR_MODIFIER_SHIFT | WLR_MODIFIER_CTRL
+                               | WLR_MODIFIER_ALT | WLR_MODIFIER_LOGO;
+} // namespace
+
 void
 Keyboard::onKey(void *data)
 {
-    auto *ev = static_cast<wlr_keyboard_key_event *>(data);
+    auto *ev                    = static_cast<wlr_keyboard_key_event *>(data);
+    const xkb_keycode_t keycode = ev->keycode + 8;
 
-    // libinput keycodes are offset by 8 relative to xkb keycodes
-    const xkb_keysym_t *syms;
-    int n = xkb_state_key_get_syms(kb->xkb_state, ev->keycode + 8, &syms);
+    // if we consumed the press, swallow the release too
+    if (ev->state == WL_KEYBOARD_KEY_STATE_RELEASED
+        && consumed.erase(ev->keycode))
+        return;
 
     bool handled = false;
-    if (ev->state == WL_KEYBOARD_KEY_STATE_PRESSED
-        && (wlr_keyboard_get_modifiers(kb) & WLR_MODIFIER_ALT))
+    if (ev->state == WL_KEYBOARD_KEY_STATE_PRESSED)
     {
-        for (int i = 0; i < n; i++)
-            handled = wm->handleKeybinding(syms[i]) || handled;
+        const uint32_t mods
+            = wlr_keyboard_get_modifiers(kb) & kBindMask; // ignore Caps/NumLock
+
+        const xkb_keysym_t *syms;
+        int n = xkb_state_key_get_syms(kb->xkb_state, keycode, &syms);
+        for (int i = 0; i < n && !handled; i++)
+            handled = wm->handleKeybinding(mods, syms[i]);
+
+        if (!handled)
+        { // also try the unshifted symbol, so "Alt+Shift+1" works
+            xkb_layout_index_t layout
+                = xkb_state_key_get_layout(kb->xkb_state, keycode);
+            const xkb_keysym_t *raw;
+            int rn = xkb_keymap_key_get_syms_by_level(kb->keymap, keycode,
+                                                      layout, 0, &raw);
+            for (int i = 0; i < rn && !handled; i++)
+                handled = wm->handleKeybinding(mods, raw[i]);
+        }
+        if (handled)
+            consumed.insert(ev->keycode);
     }
 
     if (!handled)
