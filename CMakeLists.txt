@@ -15,32 +15,42 @@ pkg_check_modules(DEPS REQUIRED IMPORTED_TARGET
 
 find_package(Lua REQUIRED)
 
+# --- Wayland protocols -------------------------------------------------------
+# wlroots headers include "<name>-protocol.h" but don't ship it, so generate
+# the server headers with wayland-scanner. Link `muwm_protocols` to get both
+# the generated headers (built before anything that needs them) and their
+# include directory.
+
 pkg_check_modules(WAYLAND_PROTOCOLS REQUIRED wayland-protocols)
 pkg_get_variable(WAYLAND_PROTOCOLS_DIR wayland-protocols pkgdatadir)
+
 find_program(WAYLAND_SCANNER wayland-scanner REQUIRED)
 
-# Generate xdg-shell-protocol.h (wlroots headers include it, but don't ship it)
-set(XDG_XML ${WAYLAND_PROTOCOLS_DIR}/stable/xdg-shell/xdg-shell.xml)
-set(XDG_HDR ${CMAKE_BINARY_DIR}/generated/xdg-shell-protocol.h)
-add_custom_command(
-    OUTPUT ${XDG_HDR}
-    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/generated
-    COMMAND ${WAYLAND_SCANNER} server-header ${XDG_XML} ${XDG_HDR}
-    DEPENDS ${XDG_XML}
-)
+set(PROTOCOLS_GENERATED_DIR ${CMAKE_BINARY_DIR}/generated)
+file(MAKE_DIRECTORY ${PROTOCOLS_GENERATED_DIR})
 
+add_library(muwm_protocols INTERFACE)
+target_include_directories(muwm_protocols INTERFACE ${PROTOCOLS_GENERATED_DIR})
 
-set(DECO_XML ${WAYLAND_PROTOCOLS_DIR}/unstable/xdg-decoration/xdg-decoration-unstable-v1.xml)
-set(DECO_HDR ${CMAKE_BINARY_DIR}/generated/xdg-decoration-unstable-v1-protocol.h)
-add_custom_command(
-    OUTPUT ${DECO_HDR}
-    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/generated
-    COMMAND ${WAYLAND_SCANNER} server-header ${DECO_XML} ${DECO_HDR}
-    DEPENDS ${DECO_XML}
-)
+# add_protocol(<path to protocol .xml>)
+# Generates <xml-basename>-protocol.h, e.g. xdg-shell.xml -> xdg-shell-protocol.h
+function(add_protocol XML)
+    get_filename_component(name ${XML} NAME_WE)
+    set(header ${PROTOCOLS_GENERATED_DIR}/${name}-protocol.h)
+    add_custom_command(
+        OUTPUT ${header}
+        COMMAND ${WAYLAND_SCANNER} server-header ${XML} ${header}
+        DEPENDS ${XML}
+        VERBATIM
+    )
+    target_sources(muwm_protocols INTERFACE ${header})
+endfunction()
 
-add_custom_target(protocols DEPENDS ${XDG_HDR} ${DECO_HDR})   # replaces the old line
+add_protocol(${WAYLAND_PROTOCOLS_DIR}/stable/xdg-shell/xdg-shell.xml)
+add_protocol(${WAYLAND_PROTOCOLS_DIR}/unstable/xdg-decoration/xdg-decoration-unstable-v1.xml)
+add_protocol(${WAYLAND_PROTOCOLS_DIR}/unstable/wlr-layer-shell-unstable-v1.xml)
 
+# --- muwm ----------------------------------------------------------------------
 
 add_executable(${PROJECT_NAME}
     src/main.cpp
@@ -50,24 +60,20 @@ add_executable(${PROJECT_NAME}
     src/Toplevel.cpp
     src/Keyboard.cpp
     src/Decoration.cpp
-
-    include/Decoration.hpp
-    include/Output.hpp
-    include/Keyboard.hpp
-    include/Toplevel.hpp
-    include/wlroots.hpp
-    include/MuWM.hpp)
-
-add_dependencies(${PROJECT_NAME} protocols)
+    src/EventBus.cpp
+)
 
 target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_CURRENT_SOURCE_DIR}/thirdparty
-    ${CMAKE_BINARY_DIR}/generated)
+    ${LUA_INCLUDE_DIR}
+)
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
     PkgConfig::DEPS
-    lua)
+    ${LUA_LIBRARIES}
+    muwm_protocols
+)
 
 target_compile_definitions(${PROJECT_NAME} PRIVATE
     PROJECT_NAME="${PROJECT_NAME}"
