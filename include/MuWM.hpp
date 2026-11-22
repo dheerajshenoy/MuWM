@@ -4,6 +4,7 @@
 #include "Listener.hpp"
 #include "Toplevel.hpp"
 #include "argparse.hpp"
+#include "lua.hpp"
 #include "wlroots.hpp"
 
 #include <vector>
@@ -63,6 +64,10 @@ private:
     void onLayoutChange(void *data);
     void onNewDecoration(void *data);
 
+    void initLua();
+    void initLuaBindings();
+    void loadConfig();
+
 private:
     bool m_ok = false;
     const argparse::ArgumentParser &m_parser;
@@ -95,4 +100,6 @@ private:
 
     Config m_config;
     std::vector<Toplevel *> m_toplevels;
+
+    lua_State *m_lua = nullptr;
 };

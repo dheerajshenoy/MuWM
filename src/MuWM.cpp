@@ -8,8 +8,21 @@
 #include <csignal>
 #include <unistd.h>
 
+// std::filesystem doesn't expand "~", so resolve the path ourselves.
+static std::filesystem::path
+configFilePath()
+{
+    if (const char *xdg = getenv("XDG_CONFIG_HOME"); xdg && *xdg)
+        return std::filesystem::path(xdg) / PROJECT_NAME / "init.lua";
+    if (const char *home = getenv("HOME"); home && *home)
+        return std::filesystem::path(home) / ".config" / PROJECT_NAME
+               / "init.lua";
+    return {};
+}
+
 MuWM::MuWM(const argparse::ArgumentParser &parser) : m_parser(parser)
 {
+    initLua();
     m_ok = init();
 }
 
@@ -20,6 +33,14 @@ MuWM::~MuWM()
 
     m_newToplevel.unbind();
     m_newInput.unbind();
+    m_newDecoration.unbind();
+    m_layoutChange.unbind();
+    // wlroots asserts that a cursor has no listeners left when destroyed
+    m_cursorMotion.unbind();
+    m_cursorMotionAbs.unbind();
+    m_cursorButton.unbind();
+    m_cursorAxis.unbind();
+    m_cursorFrame.unbind();
 
     if (m_outputListener.listener.link.prev)
         wl_list_remove(&m_outputListener.listener.link);
@@ -52,6 +73,11 @@ MuWM::~MuWM()
     {
         wl_display_destroy(m_display);
     }
+
+    if (m_lua)
+    {
+        lua_close(m_lua);
+    }
 }
 
 bool
@@ -63,6 +89,15 @@ MuWM::init()
         wlr_log(WLR_ERROR, "Failed to create display");
         return false;
     }
+
+    // Quit cleanly (same path as Alt+Q) on SIGINT/SIGTERM.
+    for (int sig : {SIGINT, SIGTERM})
+        wl_event_loop_add_signal(wl_display_get_event_loop(m_display), sig,
+                                 [](int, void *d)
+        {
+            wl_display_terminate(static_cast<wl_display *>(d));
+            return 0;
+        }, m_display);
 
     m_backend
         = wlr_backend_autocreate(wl_display_get_event_loop(m_display), nullptr);
@@ -188,6 +223,8 @@ MuWM::run(const std::string &startupCmd)
     setenv("WAYLAND_DISPLAY", socket, 1);
     signal(SIGCHLD, SIG_IGN); // don't leave zombie processes behind
     wlr_log(WLR_INFO, "Running on WAYLAND_DISPLAY=%s", socket);
+
+    loadConfig();
 
     if (!startupCmd.empty())
         spawn(startupCmd);
@@ -470,4 +507,61 @@ MuWM::onNewDecoration(void *data)
         &d->deco->toplevel->base->surface->events.commit, d);
     d->destroy.bind<&Decoration::onDestroy>(&d->deco->events.destroy, d);
     d->onRequestMode(nullptr); // apply right away if already initialized
+}
+
+void
+MuWM::initLua()
+{
+    m_lua = luaL_newstate();
+    if (!m_lua)
+    {
+        wlr_log(WLR_ERROR, "Failed to create Lua state");
+        return;
+    }
+
+    luaL_openlibs(m_lua);
+
+    initLuaBindings();
+}
+
+// Runs the user's config. Must happen after the socket exists and
+// WAYLAND_DISPLAY is set, so that muwm.spawn() clients can connect.
+void
+MuWM::loadConfig()
+{
+    if (!m_lua)
+        return;
+
+    const auto path = configFilePath();
+    if (path.empty() || !std::filesystem::exists(path))
+        return;
+
+    if (luaL_dofile(m_lua, path.c_str()) != LUA_OK)
+    {
+        wlr_log(WLR_ERROR, "Failed to load Lua config: %s",
+                lua_tostring(m_lua, -1));
+        lua_pop(m_lua, 1);
+        return;
+    }
+    wlr_log(WLR_INFO, "Lua config loaded from %s", path.c_str());
+}
+
+void
+MuWM::initLuaBindings()
+{
+    // muwm
+    lua_newtable(m_lua);
+
+    // muwm.spawn(cmd)
+    // The compositor pointer is passed to the callback as an upvalue.
+    lua_pushlightuserdata(m_lua, this);
+    lua_pushcclosure(m_lua, [](lua_State *L) -> int
+    {
+        auto *wm = static_cast<MuWM *>(lua_touserdata(L, lua_upvalueindex(1)));
+        const char *cmd = luaL_checkstring(L, 1);
+        wm->spawn(cmd);
+        return 0;
+    }, 1);
+    lua_setfield(m_lua, -2, "spawn");
+    lua_setglobal(m_lua, "muwm");
 }

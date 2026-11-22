@@ -6,11 +6,14 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 find_package(PkgConfig REQUIRED)
+
 pkg_check_modules(DEPS REQUIRED IMPORTED_TARGET
     wayland-server
     wlroots-0.20
     xkbcommon
 )
+
+find_package(Lua REQUIRED)
 
 pkg_check_modules(WAYLAND_PROTOCOLS REQUIRED wayland-protocols)
 pkg_get_variable(WAYLAND_PROTOCOLS_DIR wayland-protocols pkgdatadir)
@@ -62,7 +65,8 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${CMAKE_BINARY_DIR}/generated)
 
 target_link_libraries(${PROJECT_NAME} PRIVATE
-    PkgConfig::DEPS)
+    PkgConfig::DEPS
+    lua)
 
 target_compile_definitions(${PROJECT_NAME} PRIVATE
     PROJECT_NAME="${PROJECT_NAME}"
