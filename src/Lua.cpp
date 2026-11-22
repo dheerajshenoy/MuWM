@@ -3,14 +3,13 @@
 
 #include "MuWM.hpp"
 
-#include <variant>
-
 #include <cctype>
 #include <climits>
 #include <cmath>
 #include <cstring>
 #include <expected>
 #include <filesystem>
+#include <variant>
 
 namespace
 {
@@ -277,19 +276,17 @@ pushWindow(lua_State *L, const WindowInfo &w)
 int
 pushEventData(lua_State *L, const EventData &data)
 {
-    return std::visit(
-        [L](const auto &d) -> int
+    return std::visit([L](const auto &d) -> int
+    {
+        using T = std::decay_t<decltype(d)>;
+        if constexpr (std::is_same_v<T, std::monostate>)
+            return 0;
+        else if constexpr (std::is_same_v<T, WindowInfo>)
         {
-            using T = std::decay_t<decltype(d)>;
-            if constexpr (std::is_same_v<T, std::monostate>)
-                return 0;
-            else if constexpr (std::is_same_v<T, WindowInfo>)
-            {
-                pushWindow(L, d);
-                return 1;
-            }
-        },
-        data);
+            pushWindow(L, d);
+            return 1;
+        }
+    }, data);
 }
 
 void
@@ -562,9 +559,8 @@ luaOn(lua_State *L)
     auto ref = std::make_shared<LuaRef>(mainThread(L),
                                         luaL_ref(L, LUA_REGISTRYINDEX));
 
-    const int id = wmFrom(L)->eventBus().add(
-        type, [ref](const EventData &data)
-        { callRef(ref->L, ref->ref, data); }, Once);
+    const int id = wmFrom(L)->eventBus().add(type, [ref](const EventData &data)
+    { callRef(ref->L, ref->ref, data); }, Once);
     lua_pushinteger(L, id);
     return 1;
 }
