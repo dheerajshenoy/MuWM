@@ -39,6 +39,12 @@ MuWM::~MuWM()
     if (m_outputListener.listener.link.prev)
         wl_list_remove(&m_outputListener.listener.link);
 
+    // Destroying the scene frees every workspace tree; Output::onDestroy runs
+    // later (when the backend is torn down) and must not free them again.
+    for (Output *output : m_outputs)
+        for (Workspace *ws : output->workspaces)
+            ws->sceneTree = nullptr;
+
     if (m_scene)
         wlr_scene_node_destroy(&m_scene->tree.node);
 
@@ -220,14 +226,19 @@ MuWM::handleNewOutput(wlr_output *output)
     o->destroy.bind<&Output::onDestroy>(&output->events.destroy, o);
     o->requestState.bind<&Output::onRequestState>(&output->events.request_state,
                                                   o);
-    for (int i = 1; i < 9; i++)
+    for (int i = 1; i <= 9; i++)
     {
         Workspace *w = new Workspace{};
         w->name      = std::to_string(i);
+        auto *tree   = wlr_scene_tree_create(m_windowTree);
+        wlr_scene_node_set_enabled(
+            &tree->node, i == 1); // only the first workspace is visible
+        w->sceneTree = tree;
+        w->output    = o;
         o->workspaces.push_back(w);
     }
 
-    o->focusedWorkspace = o->workspaces[0];
+    o->workspace = o->workspaces[0];
     m_outputs.push_back(o);
     if (!m_focusedOutput)
         m_focusedOutput = o;
@@ -236,7 +247,10 @@ MuWM::handleNewOutput(wlr_output *output)
     if (m_outputs.size() == 1)
     {
         for (Toplevel *t : m_unassigned.toplevels)
+        {
             t->workspace = o->workspace;
+            wlr_scene_node_reparent(&t->tree->node, t->workspace->sceneTree);
+        }
         o->workspace->toplevels       = std::move(m_unassigned.toplevels);
         o->workspace->focusedToplevel = m_unassigned.focusedToplevel;
         m_unassigned                  = {};
@@ -549,7 +563,12 @@ void
 MuWM::addToplevel(Toplevel *t)
 {
     if (!t->workspace)
+    {
         t->workspace = currentWorkspace();
+        // m_unassigned has no tree of its own; leave the window where it is
+        if (t->workspace->sceneTree)
+            wlr_scene_node_reparent(&t->tree->node, t->workspace->sceneTree);
+    }
 
     auto &toplevels = t->workspace->toplevels;
     if (std::find(toplevels.begin(), toplevels.end(), t) == toplevels.end())
@@ -923,8 +942,9 @@ MuWM::recolorBorders()
 {
     Toplevel *focused = focusedToplevel();
     for (Output *output : m_outputs)
-        for (Toplevel *t : output->workspace->toplevels)
-            t->setFocused(t == focused);
+        for (Workspace *ws : output->workspaces)
+            for (Toplevel *t : ws->toplevels)
+                t->setFocused(t == focused);
 }
 
 void
@@ -1000,6 +1020,17 @@ MuWM::swapNext()
 }
 
 void
+MuWM::swapMaster()
+{
+    Workspace *ws = currentWorkspace();
+    const int i   = focusedIndex(ws);
+    if (i < 0)
+        return;
+    std::swap(ws->toplevels[i], ws->toplevels[0]);
+    arrange(ws);
+}
+
+void
 MuWM::swapPrev()
 {
     Workspace *ws = currentWorkspace();
@@ -1026,17 +1057,24 @@ MuWM::removeOutput(Output *output)
     Workspace *target
         = m_outputs.empty() ? &m_unassigned : m_outputs.front()->workspace;
 
-    for (Toplevel *t : output->workspace->toplevels)
+    wlr_scene_tree *targetTree
+        = target->sceneTree ? target->sceneTree : m_windowTree;
+
+    for (Workspace *ws : output->workspaces)
     {
-        t->workspace = target;
-        target->toplevels.push_back(t);
+        for (Toplevel *t : ws->toplevels)
+        {
+            t->workspace = target;
+            wlr_scene_node_reparent(&t->tree->node, targetTree);
+            target->toplevels.push_back(t);
+        }
+
+        if (!target->focusedToplevel)
+            target->focusedToplevel = ws->focusedToplevel;
+
+        ws->toplevels.clear();
+        ws->focusedToplevel = nullptr;
     }
-
-    if (!target->focusedToplevel)
-        target->focusedToplevel = output->workspace->focusedToplevel;
-
-    output->workspace->toplevels.clear();
-    output->workspace->focusedToplevel = nullptr;
 
     if (m_focusedOutput == output)
         m_focusedOutput = m_outputs.empty() ? nullptr : m_outputs.front();
@@ -1044,13 +1082,117 @@ MuWM::removeOutput(Output *output)
 }
 
 void
-MuWM::workspaceNext()
+MuWM::cycleWorkspace(int delta)
 {
     if (!m_focusedOutput)
         return;
+
+    auto &workspaces = m_focusedOutput->workspaces;
+    const int n      = static_cast<int>(workspaces.size());
+    if (n <= 1)
+        return;
+
+    Workspace *ws = m_focusedOutput->workspace;
+    int i         = std::find(workspaces.begin(), workspaces.end(), ws)
+                    - workspaces.begin();
+    i             = (i + delta + n) % n;
+    switchWorkspace(m_focusedOutput, workspaces[i]);
+}
+
+void
+MuWM::workspaceNext()
+{
+    cycleWorkspace(1);
 }
 
 void
 MuWM::workspacePrev()
 {
+    cycleWorkspace(-1);
+}
+
+void
+MuWM::focusWorkspace(int n)
+{
+    if (!m_focusedOutput)
+        return;
+
+    auto &workspaces = m_focusedOutput->workspaces;
+    if (n < 1 || n > static_cast<int>(workspaces.size()))
+        return;
+
+    switchWorkspace(m_focusedOutput, workspaces[n - 1]);
+}
+
+void
+MuWM::windowToWorkspace(int index)
+{
+    if (!m_focusedOutput)
+        return;
+
+    auto &workspaces = m_focusedOutput->workspaces;
+    if (index < 1 || index > static_cast<int>(workspaces.size()))
+        return;
+
+    Workspace *ws_target = workspaces[index - 1];
+    if (Toplevel *t = focusedToplevel())
+        toplevelToWorkspace(t, ws_target);
+}
+
+void
+MuWM::switchWorkspace(Output *out, Workspace *ws_target)
+{
+    if (!out || !ws_target || out->workspace == ws_target)
+        return;
+
+    Workspace *ws_old = out->workspace;
+
+    // Deactivate the old window while it is still that workspace's focus.
+    if (Toplevel *old = ws_old->focusedToplevel)
+    {
+        wlr_xdg_toplevel_set_activated(old->xdg, false);
+        old->setFocused(false);
+    }
+
+    wlr_scene_node_set_enabled(&ws_old->sceneTree->node, false);
+    wlr_scene_node_set_enabled(&ws_target->sceneTree->node, true);
+    out->workspace  = ws_target;
+    m_focusedOutput = out;
+
+    arrange(ws_target);
+
+    Toplevel *next = ws_target->focusedToplevel;
+    if (!next && !ws_target->toplevels.empty())
+        next = ws_target->toplevels.back();
+    // focusToplevel returns early if the window is already "focused"
+    ws_target->focusedToplevel = nullptr;
+
+    if (next)
+        focusToplevel(next);
+    else if (!m_focusedLayer)
+        wlr_seat_keyboard_clear_focus(m_seat);
+}
+
+void
+MuWM::toplevelToWorkspace(Toplevel *toplevel, Workspace *ws_target)
+{
+    if (!toplevel || !ws_target || toplevel->workspace == ws_target)
+        return;
+
+    Workspace *ws_old = toplevel->workspace;
+    if (ws_old)
+    {
+        std::erase(ws_old->toplevels, toplevel);
+        if (ws_old->focusedToplevel == toplevel)
+            ws_old->focusedToplevel = nullptr;
+    }
+
+    toplevel->workspace = ws_target;
+    ws_target->toplevels.push_back(toplevel);
+    wlr_scene_node_reparent(&toplevel->tree->node, ws_target->sceneTree);
+
+    arrange(ws_old);
+    arrange(ws_target);
+
+    focusToplevel(toplevel);
 }

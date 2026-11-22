@@ -51,9 +51,12 @@ public:
     void focusPrev();
     void swapNext();
     void swapPrev();
+    void swapMaster();
     void workspaceNext();
     void workspacePrev();
     void close();
+    void focusWorkspace(int index);
+    void windowToWorkspace(int index);
 
     enum Change
     {
@@ -126,6 +129,9 @@ private:
 
     void initLua();
     void initLuaBindings();
+    void cycleWorkspace(int delta);
+    void switchWorkspace(Output *, Workspace *);
+    void toplevelToWorkspace(Toplevel *, Workspace *);
 
 private:
     bool m_ok = false;

@@ -392,6 +392,22 @@ luaSpawn(lua_State *L)
     return 0;
 }
 
+int
+luaFocusWorkspace(lua_State *L)
+{
+    const int index = static_cast<int>(luaL_checkinteger(L, 1));
+    wmFrom(L)->focusWorkspace(index);
+    return 0;
+}
+
+int
+luaWindowToWorkspace(lua_State *L)
+{
+    const int index = static_cast<int>(luaL_checkinteger(L, 1));
+    wmFrom(L)->windowToWorkspace(index);
+    return 0;
+}
+
 // Lua function that calls a no-argument MuWM method.
 template <void (MuWM::*Method)()>
 int
@@ -618,8 +634,11 @@ MuWM::initLuaBindings()
         funcField("focus_prev", luaCall<&MuWM::focusPrev>),
         funcField("swap_next", luaCall<&MuWM::swapNext>),
         funcField("swap_prev", luaCall<&MuWM::swapPrev>),
-        funcField("workspace_next",  luaCall<&MuWM::workspaceNext>),
-        funcField("workspace_prev",  luaCall<&MuWM::workspacePrev>),
+        funcField("swap_master", luaCall<&MuWM::swapMaster>),
+        funcField("workspace_next", luaCall<&MuWM::workspaceNext>),
+        funcField("workspace_prev", luaCall<&MuWM::workspacePrev>),
+        funcField("focus_workspace", luaFocusWorkspace),
+        funcField("window_to_workspace", luaWindowToWorkspace),
 
         funcField("close", luaCall<&MuWM::close>),
         funcField("quit", luaCall<&MuWM::quit>),

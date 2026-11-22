@@ -17,29 +17,29 @@ Tiling Wayland compositor in C++ on wlroots (CMake).
 
 ## Next: core usability
 
-- [ ] Focus next / previous window (Alt+J / Alt+K)
-- [ ] Close the focused window (Alt+Shift+Q, `wlr_xdg_toplevel_send_close`)
-- [ ] Swap / promote a window to master
-- [ ] Verify output resize re-tiles (`request_state` + layout `change`)
+- [x] Focus next / previous window (Alt+J / Alt+K)
+- [x] Close the focused window (Alt+Shift+Q, `wlr_xdg_toplevel_send_close`)
+- [x] Swap / promote a window to master
+- [x] Verify output resize re-tiles (`request_state` + layout `change`)
+- [x] Clean shutdown on SIGINT / SIGTERM (destroy listeners, `wl_display_destroy_clients`)
 - [ ] xdg popups (menus, tooltips). Without them, right-click menus won't show
 - [ ] Floating windows for dialogs (toplevels with a parent) and fullscreen requests
 - [ ] Client cursor shape (`request_set_cursor`, cursor-shape-v1)
-- [ ] Clean shutdown on SIGINT / SIGTERM (destroy listeners, `wl_display_destroy_clients`)
 
 ## Configuration (Lua)
 
-- [ ] Wire `Config` into `init()` / `run()`: load before `wlr_backend_start`, use `m_config` for gap and border
-- [ ] Proxy-table options (`muwm.opts`) with validation
-- [ ] Config path: `$XDG_CONFIG_HOME/muwm/config.lua`, fallback `~/.config/muwm/config.lua`
-- [ ] `muwm.bind(key, fn)`: callbacks stored in the Lua registry, called with `lua_pcall`
-- [ ] Replace the hardcoded Alt+Q / Alt+Return with config bindings
-- [ ] Reload keybinding (reset `m_config`, rerun config, `arrange()`)
-- [ ] Keyboard layout, xkb options and repeat rate as config options
+- [x] Wire `Config` into `init()` / `run()`: load before `wlr_backend_start`, use `m_config` for gap and border
+- [x] Proxy-table options (`muwm.opts`) with validation
+- [x] Config path: `$XDG_CONFIG_HOME/muwm/config.lua`, fallback `~/.config/muwm/config.lua`
+- [x] `muwm.bind(key, fn)`: callbacks stored in the Lua registry, called with `lua_pcall`
+- [x] Replace the hardcoded Alt+Q / Alt+Return with config bindings
+- [x] Reload keybinding (reset `m_config`, rerun config, `arrange()`)
+- [x] Keyboard layout, xkb options and repeat rate as config options
 - [ ] LuaLS annotation stub for editor completion
 
 ## Layout and windows
 
-- [ ] Per-output layout instead of the bounding box of all outputs (multi-monitor)
+- [x] Per-output layout instead of the bounding box of all outputs (multi-monitor)
 - [ ] Workspaces / tags
 - [ ] Window rules (match on app_id / title)
 - [ ] More layouts (monocle, grid) and a way to switch

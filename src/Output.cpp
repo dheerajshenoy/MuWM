@@ -16,7 +16,13 @@ Output::onDestroy(void *)
 {
     wm->closeLayerSurfacesOn(output);
     wm->removeOutput(this);
-    delete workspace;
+    for (Workspace *ws : workspaces)
+    {
+        if (ws->sceneTree)
+            wlr_scene_node_destroy(&ws->sceneTree->node);
+        delete ws;
+    }
+    workspaces.clear();
     workspace = nullptr;
     output->data = nullptr;
     frame.unbind();

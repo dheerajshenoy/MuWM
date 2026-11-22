@@ -18,7 +18,7 @@ struct Output
     Listener<Output> destroy;
     Listener<Output> requestState;
     std::vector<Workspace *> workspaces;
-    Workspace *focusedWorkspace = nullptr;
+    Workspace *workspace = nullptr;
 
     void onFrame(void *data);
     void onDestroy(void *data);
