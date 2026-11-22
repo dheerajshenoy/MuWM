@@ -48,7 +48,8 @@ endfunction()
 
 add_protocol(${WAYLAND_PROTOCOLS_DIR}/stable/xdg-shell/xdg-shell.xml)
 add_protocol(${WAYLAND_PROTOCOLS_DIR}/unstable/xdg-decoration/xdg-decoration-unstable-v1.xml)
-add_protocol(${WAYLAND_PROTOCOLS_DIR}/unstable/wlr-layer-shell-unstable-v1.xml)
+# Not part of wayland-protocols; vendored from wlr-protocols.
+add_protocol(${CMAKE_CURRENT_SOURCE_DIR}/protocols/wlr-layer-shell-unstable-v1.xml)
 
 # --- muwm ----------------------------------------------------------------------
 
