@@ -56,23 +56,25 @@ private:
     void onCursorAxis(void *data);
     void onCursorFrame(void *data);
     void onLayoutChange(void *data);
+    void onNewDecoration(void *data);
 
 private:
     bool m_ok = false;
     const argparse::ArgumentParser &m_parser;
 
-    wl_display *m_display                  = nullptr;
-    wlr_backend *m_backend                 = nullptr;
-    wlr_renderer *m_renderer               = nullptr;
-    wlr_allocator *m_allocator             = nullptr;
-    wlr_scene *m_scene                     = nullptr;
-    wlr_output_layout *m_layout            = nullptr;
-    wlr_scene_output_layout *m_sceneLayout = nullptr;
-    wlr_seat *m_seat                       = nullptr;
-    wlr_xdg_shell *m_xdgShell              = nullptr;
-    wlr_cursor *m_cursor                   = nullptr;
-    wlr_xcursor_manager *m_xcursor         = nullptr;
-    Toplevel *m_focused                    = nullptr;
+    wl_display *m_display                        = nullptr;
+    wlr_backend *m_backend                       = nullptr;
+    wlr_renderer *m_renderer                     = nullptr;
+    wlr_allocator *m_allocator                   = nullptr;
+    wlr_scene *m_scene                           = nullptr;
+    wlr_output_layout *m_layout                  = nullptr;
+    wlr_scene_output_layout *m_sceneLayout       = nullptr;
+    wlr_seat *m_seat                             = nullptr;
+    wlr_xdg_shell *m_xdgShell                    = nullptr;
+    wlr_cursor *m_cursor                         = nullptr;
+    wlr_xcursor_manager *m_xcursor               = nullptr;
+    wlr_xdg_decoration_manager_v1 *m_decoManager = nullptr;
+    Toplevel *m_focused                          = nullptr;
 
     OutputListener m_outputListener;
 
@@ -84,6 +86,7 @@ private:
     Listener<MuWM> m_newInput;
     Listener<MuWM> m_newToplevel;
     Listener<MuWM> m_layoutChange;
+    Listener<MuWM> m_newDecoration;
 
     Config m_config;
     std::vector<Toplevel *> m_toplevels;

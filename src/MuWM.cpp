@@ -1,5 +1,6 @@
 #include "MuWM.hpp"
 
+#include "Decoration.hpp"
 #include "Keyboard.hpp"
 #include "Output.hpp"
 #include "Toplevel.hpp"
@@ -78,7 +79,6 @@ MuWM::init()
         return false;
     }
 
-    // Advertises wl_shm (and dmabuf if supported); clients like foot need it.
     if (!wlr_renderer_init_wl_display(m_renderer, m_display))
     {
         wlr_log(WLR_ERROR, "Failed to init renderer wl_display globals");
@@ -143,6 +143,10 @@ MuWM::init()
     };
     wl_signal_add(&m_backend->events.new_output, &m_outputListener.listener);
 
+    m_decoManager = wlr_xdg_decoration_manager_v1_create(m_display);
+    m_newDecoration.bind<&MuWM::onNewDecoration>(
+        &m_decoManager->events.new_toplevel_decoration, this);
+
     return true;
 }
 
@@ -181,8 +185,7 @@ MuWM::run(const std::string &startupCmd)
     if (!wlr_backend_start(m_backend))
         return false;
 
-    setenv("WAYLAND_DISPLAY", socket,
-           1);                // must happen before spawning children
+    setenv("WAYLAND_DISPLAY", socket, 1);
     signal(SIGCHLD, SIG_IGN); // don't leave zombie processes behind
     wlr_log(WLR_INFO, "Running on WAYLAND_DISPLAY=%s", socket);
 
@@ -237,9 +240,6 @@ MuWM::handleNewInput(wlr_input_device *device)
     xkb_keymap_unref(km);
     xkb_context_unref(ctx);
     wlr_keyboard_set_repeat_info(kb, 25, 600);
-
-    // Make the seat aware of a keyboard immediately, so the first window to
-    // map can receive keyboard focus before any key has been pressed.
     wlr_seat_set_keyboard(m_seat, kb);
 
     // If a window mapped before any keyboard existed, give it focus now.
@@ -299,7 +299,7 @@ MuWM::addToplevel(Toplevel *t)
 void
 MuWM::removeToplevel(Toplevel *t)
 {
-    std::erase(m_toplevels, t); // no-op if already removed (unmap then destroy)
+    std::erase(m_toplevels, t);
     if (m_focused == t)
         m_focused = nullptr;
     arrange();
@@ -324,10 +324,8 @@ MuWM::arrange()
 
     auto place = [](Toplevel *t, int x, int y, int w, int h)
     {
-        wlr_scene_node_set_position(&t->tree->node, x,
-                                    y); // where it is: our decision
-        wlr_xdg_toplevel_set_size(t->xdg, w,
-                                  h); // how big: a request to the client
+        wlr_scene_node_set_position(&t->tree->node, x, y);
+        wlr_xdg_toplevel_set_size(t->xdg, w, h);
     };
 
     const int n = static_cast<int>(m_toplevels.size());
@@ -423,8 +421,6 @@ void
 MuWM::onCursorAxis(void *data)
 {
     auto *ev = static_cast<wlr_pointer_axis_event *>(data);
-    // the relative_direction argument exists in 0.18+; remove it if the
-    // compiler complains
     wlr_seat_pointer_notify_axis(m_seat, ev->time_msec, ev->orientation,
                                  ev->delta, ev->delta_discrete, ev->source,
                                  ev->relative_direction);
@@ -443,12 +439,25 @@ MuWM::spawn(const std::string &cmd)
     {
         setsid(); // detach from our process group
         execl("/bin/sh", "sh", "-c", cmd.c_str(), nullptr);
-        _exit(1); // only reached if exec failed
+        _exit(1);
     }
 }
 
 void
 MuWM::onLayoutChange(void *)
 {
-    arrange(); // output geometry changed: re-tile
+    arrange();
+}
+
+void
+MuWM::onNewDecoration(void *data)
+{
+    auto *d
+        = new Decoration{static_cast<wlr_xdg_toplevel_decoration_v1 *>(data)};
+    d->requestMode.bind<&Decoration::onRequestMode>(
+        &d->deco->events.request_mode, d);
+    d->commit.bind<&Decoration::onCommit>(
+        &d->deco->toplevel->base->surface->events.commit, d);
+    d->destroy.bind<&Decoration::onDestroy>(&d->deco->events.destroy, d);
+    d->onRequestMode(nullptr); // apply right away if already initialized
 }

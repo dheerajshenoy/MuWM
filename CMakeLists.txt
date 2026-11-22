@@ -26,7 +26,17 @@ add_custom_command(
     DEPENDS ${XDG_XML}
 )
 
-add_custom_target(protocols DEPENDS ${XDG_HDR})
+
+set(DECO_XML ${WAYLAND_PROTOCOLS_DIR}/unstable/xdg-decoration/xdg-decoration-unstable-v1.xml)
+set(DECO_HDR ${CMAKE_BINARY_DIR}/generated/xdg-decoration-unstable-v1-protocol.h)
+add_custom_command(
+    OUTPUT ${DECO_HDR}
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/generated
+    COMMAND ${WAYLAND_SCANNER} server-header ${DECO_XML} ${DECO_HDR}
+    DEPENDS ${DECO_XML}
+)
+
+add_custom_target(protocols DEPENDS ${XDG_HDR} ${DECO_HDR})   # replaces the old line
 
 
 add_executable(${PROJECT_NAME}
@@ -35,7 +45,9 @@ add_executable(${PROJECT_NAME}
     src/Output.cpp
     src/Toplevel.cpp
     src/Keyboard.cpp
+    src/Decoration.cpp
 
+    include/Decoration.hpp
     include/Output.hpp
     include/Keyboard.hpp
     include/Toplevel.hpp
