@@ -207,6 +207,11 @@ MuWM::handleNewToplevel(wlr_xdg_toplevel *xdg)
 {
     auto *t = new Toplevel{this, xdg};
     t->tree = wlr_scene_xdg_surface_create(&m_scene->tree, xdg->base);
+
+    for (auto &r : t->border)
+        r = wlr_scene_rect_create(t->tree, 1, 1,
+                                  m_config.border.unfocused_color);
+
     t->map.bind<&Toplevel::onMap>(&xdg->base->surface->events.map, t);
     t->commit.bind<&Toplevel::onCommit>(&xdg->base->surface->events.commit, t);
     t->destroy.bind<&Toplevel::onDestroy>(&xdg->events.destroy, t);
@@ -273,11 +278,15 @@ MuWM::focusToplevel(Toplevel *t)
     if (m_focused == t)
         return;
     if (m_focused)
+    {
         wlr_xdg_toplevel_set_activated(m_focused->xdg, false);
+        m_focused->setFocused(false);
+    }
     m_focused = t;
     if (!t)
         return;
 
+    t->setFocused(true);
     wlr_scene_node_raise_to_top(&t->tree->node);
     wlr_xdg_toplevel_set_activated(t->xdg, true);
     if (wlr_keyboard *kb = wlr_seat_get_keyboard(m_seat))
@@ -326,6 +335,7 @@ MuWM::arrange()
     {
         wlr_scene_node_set_position(&t->tree->node, x, y);
         wlr_xdg_toplevel_set_size(t->xdg, w, h);
+        t->resizeBorders(w, h);
     };
 
     const int n = static_cast<int>(m_toplevels.size());

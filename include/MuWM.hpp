@@ -45,6 +45,11 @@ public:
     void processMotion(uint32_t timeMsec);
     void spawn(const std::string &cmd);
 
+    const Config &config() const
+    {
+        return m_config;
+    }
+
 private:
     bool init();
     void handleNewOutput(wlr_output *output);
