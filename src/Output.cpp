@@ -12,8 +12,9 @@ Output::onFrame(void *)
 void
 Output::onDestroy(void *)
 {
-    wl_list_remove(&frame.listener.link);
-    wl_list_remove(&destroy.listener.link);
+    frame.unbind();
+    requestState.unbind();
+    destroy.unbind();
     delete this;
 }
 
