@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Listener.hpp"
+#include "Toplevel.hpp"
 #include "argparse.hpp"
 #include "wlroots.hpp"
 
@@ -8,8 +9,8 @@ class MuWM;
 
 struct OutputListener
 {
-    wl_listener listener; // must stay first
-    MuWM *wm;
+    wl_listener listener{}; // must stay first
+    MuWM *wm = nullptr;
 };
 
 class MuWM
@@ -19,15 +20,39 @@ public:
     MuWM(const argparse::ArgumentParser &parser);
     ~MuWM();
 
-    bool run();
+    bool ok() const
+    {
+        return m_ok;
+    }
+    bool run(const std::string &startupCmd = {});
     void handleNewToplevel(wlr_xdg_toplevel *xdg);
+    void handleNewInput(wlr_input_device *device);
+    void focusToplevel(Toplevel *t);
+    void forgetToplevel(Toplevel *t);
+    bool handleKeybinding(xkb_keysym_t sym);
+    wlr_seat *seat() const
+    {
+        return m_seat;
+    }
+
+    Toplevel *toplevelAt(double x, double y, wlr_surface **surface, double *sx,
+                         double *sy);
+    void processMotion(uint32_t timeMsec);
+    void spawn(const std::string &cmd);
 
 private:
     bool init();
     void handleNewOutput(wlr_output *output);
     void onNewToplevel(void *data);
+    void onNewInput(void *data);
+    void onCursorMotion(void *data);
+    void onCursorMotionAbs(void *data);
+    void onCursorButton(void *data);
+    void onCursorAxis(void *data);
+    void onCursorFrame(void *data);
 
 private:
+    bool m_ok = false;
     const argparse::ArgumentParser &m_parser;
 
     wl_display *m_display                  = nullptr;
@@ -37,9 +62,18 @@ private:
     wlr_scene *m_scene                     = nullptr;
     wlr_output_layout *m_layout            = nullptr;
     wlr_scene_output_layout *m_sceneLayout = nullptr;
+    wlr_seat *m_seat                       = nullptr;
+    wlr_xdg_shell *m_xdgShell              = nullptr;
+    wlr_cursor *m_cursor                   = nullptr;
+    wlr_xcursor_manager *m_xcursor         = nullptr;
 
+    Listener<MuWM> m_cursorMotion;
+    Listener<MuWM> m_cursorMotionAbs;
+    Listener<MuWM> m_cursorButton;
+    Listener<MuWM> m_cursorAxis;
+    Listener<MuWM> m_cursorFrame;
+    Listener<MuWM> m_newInput;
+    Toplevel *m_focused = nullptr;
     OutputListener m_outputListener;
-    // private:
-    wlr_xdg_shell *m_xdgShell = nullptr;
     Listener<MuWM> m_newToplevel;
 };

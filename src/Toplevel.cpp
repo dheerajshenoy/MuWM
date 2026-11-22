@@ -1,10 +1,13 @@
 #include "Toplevel.hpp"
 
+#include "MuWM.hpp"
+
 void
 Toplevel::onMap(void *)
 {
     wlr_log(WLR_INFO, "Window mapped: %s",
             xdg->title ? xdg->title : "(untitled)");
+    wm->focusToplevel(this);
 }
 
 void
@@ -17,6 +20,7 @@ Toplevel::onCommit(void *)
 void
 Toplevel::onDestroy(void *)
 {
+    wm->forgetToplevel(this);
     wl_list_remove(&map.listener.link);
     wl_list_remove(&commit.listener.link);
     wl_list_remove(&destroy.listener.link);

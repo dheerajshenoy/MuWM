@@ -34,8 +34,10 @@ add_executable(${PROJECT_NAME}
     src/MuWM.cpp
     src/Output.cpp
     src/Toplevel.cpp
+    src/Keyboard.cpp
 
     include/Output.hpp
+    include/Keyboard.hpp
     include/Toplevel.hpp
     include/wlroots.hpp
     include/MuWM.hpp)

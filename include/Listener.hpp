@@ -17,4 +17,14 @@ template <typename T> struct Listener
         };
         wl_signal_add(signal, &listener);
     }
+
+    // Safe to call if never bound or already unbound.
+    void unbind()
+    {
+        if (listener.link.prev)
+        {
+            wl_list_remove(&listener.link);
+            listener.link = {};
+        }
+    }
 };
