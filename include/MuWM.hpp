@@ -51,6 +51,8 @@ public:
     void focusPrev();
     void swapNext();
     void swapPrev();
+    void workspaceNext();
+    void workspacePrev();
     void close();
 
     enum Change
@@ -74,6 +76,8 @@ public:
     // layer-shell
     void arrangeLayers(wlr_output *output);
     void moveLayerSurface(LayerShellSurface *s);
+    void focusLayerSurface(LayerShellSurface *s);
+    void releaseLayerFocus(LayerShellSurface *s);
     void removeLayerShellSurface(LayerShellSurface *s);
     void closeLayerSurfacesOn(wlr_output *output);
     bool handleKeybinding(uint32_t mods, xkb_keysym_t sym);
@@ -163,6 +167,7 @@ private:
 
     Config m_config;
     std::vector<LayerShellSurface *> m_layerSurfaces;
+    LayerShellSurface *m_focusedLayer = nullptr; // holds the keyboard, if any
 
     // Stacking order, bottom to top: background, bottom, windows, top, overlay.
     // The four layer trees are indexed by zwlr_layer_shell_v1_layer.

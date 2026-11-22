@@ -618,6 +618,9 @@ MuWM::initLuaBindings()
         funcField("focus_prev", luaCall<&MuWM::focusPrev>),
         funcField("swap_next", luaCall<&MuWM::swapNext>),
         funcField("swap_prev", luaCall<&MuWM::swapPrev>),
+        funcField("workspace_next",  luaCall<&MuWM::workspaceNext>),
+        funcField("workspace_prev",  luaCall<&MuWM::workspacePrev>),
+
         funcField("close", luaCall<&MuWM::close>),
         funcField("quit", luaCall<&MuWM::quit>),
         funcField("reload", luaCall<&MuWM::loadConfig>),

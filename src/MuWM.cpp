@@ -220,8 +220,14 @@ MuWM::handleNewOutput(wlr_output *output)
     o->destroy.bind<&Output::onDestroy>(&output->events.destroy, o);
     o->requestState.bind<&Output::onRequestState>(&output->events.request_state,
                                                   o);
-    o->workspace         = new Workspace{};
-    o->workspace->output = o;
+    for (int i = 1; i < 9; i++)
+    {
+        Workspace *w = new Workspace{};
+        w->name      = std::to_string(i);
+        o->workspaces.push_back(w);
+    }
+
+    o->focusedWorkspace = o->workspaces[0];
     m_outputs.push_back(o);
     if (!m_focusedOutput)
         m_focusedOutput = o;
@@ -527,8 +533,11 @@ MuWM::focusToplevel(Toplevel *t)
         m_focusedOutput = ws->output;
     ws->focusedToplevel = t;
 
-    t->setFocused(true);
     wlr_scene_node_raise_to_top(&t->tree->node);
+    if (m_focusedLayer)
+        return; // the window is focused again when the layer surface lets go
+
+    t->setFocused(true);
     wlr_xdg_toplevel_set_activated(t->xdg, true);
     if (wlr_keyboard *kb = wlr_seat_get_keyboard(m_seat))
         wlr_seat_keyboard_notify_enter(m_seat, t->xdg->base->surface,
@@ -771,6 +780,53 @@ MuWM::onNewLayerShellSurface(void *data)
     m_layerSurfaces.push_back(s);
 }
 
+// Gives the keyboard to a layer surface (a launcher, say). The window that
+// had it stays the "focused" one logically and gets the keyboard back later.
+void
+MuWM::focusLayerSurface(LayerShellSurface *s)
+{
+    if (m_focusedLayer == s)
+        return;
+
+    if (Toplevel *t = focusedToplevel())
+    {
+        wlr_xdg_toplevel_set_activated(t->xdg, false);
+        t->setFocused(false);
+    }
+    m_focusedLayer = s;
+
+    if (wlr_keyboard *kb = wlr_seat_get_keyboard(m_seat))
+        wlr_seat_keyboard_notify_enter(m_seat, s->layerSurface->surface,
+                                       kb->keycodes, kb->num_keycodes,
+                                       &kb->modifiers);
+    wlr_log(WLR_INFO, "Keyboard focus: layer surface %s",
+            s->layerSurface->namespace_ ? s->layerSurface->namespace_
+                                        : "(unnamed)");
+}
+
+void
+MuWM::releaseLayerFocus(LayerShellSurface *s)
+{
+    if (m_focusedLayer != s)
+        return;
+    m_focusedLayer = nullptr;
+
+    if (Toplevel *t = focusedToplevel())
+    {
+        t->setFocused(true);
+        wlr_xdg_toplevel_set_activated(t->xdg, true);
+        if (wlr_keyboard *kb = wlr_seat_get_keyboard(m_seat))
+            wlr_seat_keyboard_notify_enter(m_seat, t->xdg->base->surface,
+                                           kb->keycodes, kb->num_keycodes,
+                                           &kb->modifiers);
+        wlr_log(WLR_INFO, "Keyboard focus: back to the window");
+    }
+    else
+    {
+        wlr_seat_keyboard_clear_focus(m_seat);
+    }
+}
+
 void
 MuWM::moveLayerSurface(LayerShellSurface *s)
 {
@@ -985,4 +1041,16 @@ MuWM::removeOutput(Output *output)
     if (m_focusedOutput == output)
         m_focusedOutput = m_outputs.empty() ? nullptr : m_outputs.front();
     arrange(target);
+}
+
+void
+MuWM::workspaceNext()
+{
+    if (!m_focusedOutput)
+        return;
+}
+
+void
+MuWM::workspacePrev()
+{
 }

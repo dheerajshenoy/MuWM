@@ -19,4 +19,8 @@ struct LayerShellSurface
     void onUnmap(void *data);
     void onCommit(void *data);
     void onDestroy(void *data);
+
+    // Launchers and lock screens ask for the keyboard; wallpapers and most
+    // bars don't. Only the top and overlay layers may take it.
+    bool wantsKeyboard() const;
 };

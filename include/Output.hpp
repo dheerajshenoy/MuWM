@@ -3,6 +3,8 @@
 #include "Listener.hpp"
 #include "wlroots.hpp"
 
+#include <vector>
+
 struct Workspace;
 class MuWM;
 
@@ -15,7 +17,8 @@ struct Output
     Listener<Output> frame;
     Listener<Output> destroy;
     Listener<Output> requestState;
-    Workspace *workspace = nullptr;
+    std::vector<Workspace *> workspaces;
+    Workspace *focusedWorkspace = nullptr;
 
     void onFrame(void *data);
     void onDestroy(void *data);
