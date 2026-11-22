@@ -62,8 +62,9 @@ Keyboard::onModifiers(void *)
 void
 Keyboard::onDestroy(void *)
 {
-    wl_list_remove(&key.listener.link);
-    wl_list_remove(&modifiers.listener.link);
-    wl_list_remove(&destroy.listener.link);
+    key.unbind();
+    modifiers.unbind();
+    destroy.unbind();
+    wm->removeKeyboard(this);
     delete this;
 }

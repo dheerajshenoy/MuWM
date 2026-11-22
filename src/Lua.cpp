@@ -20,6 +20,7 @@ struct Field
     enum Kind
     {
         String,
+        Bool,
         Int,
         Color,
         Sub,
@@ -39,9 +40,9 @@ struct Group
 };
 
 Field
-stringField(const char *name, std::string *p)
+stringField(const char *name, std::string *p, int changes = 0)
 {
-    return {Field::String, name, p};
+    return {Field::String, name, p, nullptr, changes};
 }
 
 Field
@@ -49,6 +50,12 @@ intField(const char *name, int *p, int min = INT_MIN, int max = INT_MAX,
          int changes = 0)
 {
     return {Field::Int, name, p, nullptr, changes, min, max};
+}
+
+Field
+boolField(const char *name, bool *p, int changes = 0)
+{
+    return {Field::Bool, name, p, nullptr, changes};
 }
 
 Field
@@ -209,6 +216,13 @@ setField(lua_State *L, const Group *g, const char *key, int val)
             break;
         }
 
+        case Field::Bool:
+        {
+            expectType(L, val, LUA_TBOOLEAN, key, "a boolean");
+            *static_cast<bool *>(f->ptr) = lua_toboolean(L, val);
+            break;
+        }
+
         case Field::String:
             expectType(L, val, LUA_TSTRING, key, "a string");
             *static_cast<std::string *>(f->ptr) = lua_tostring(L, val);
@@ -254,6 +268,10 @@ pushField(lua_State *L, const Field *f)
 {
     switch (f->kind)
     {
+        case Field::Bool:
+            lua_pushboolean(L, *static_cast<bool *>(f->ptr));
+            break;
+
         case Field::String:
             lua_pushstring(L, static_cast<std::string *>(f->ptr)->c_str());
             break;
@@ -351,7 +369,7 @@ parseBinding(std::string_view s)
 }
 
 int
-luaBind(lua_State *L)
+keyBind(lua_State *L)
 {
     const char *spec = luaL_checkstring(L, 1);
     luaL_checktype(L, 2, LUA_TFUNCTION);
@@ -405,6 +423,7 @@ struct EventName
 
 constexpr EventName kEventNames[] = {
     {"startup", EventType::Startup},
+    {"config_reload", EventType::ConfigReload},
 };
 
 std::expected<EventType, const char *>
@@ -505,11 +524,19 @@ void
 MuWM::loadConfig()
 {
     if (!m_lua)
+    {
+        installDefaultBindings();
         return;
+    }
 
     const auto path = configFilePath();
     if (path.empty() || !std::filesystem::exists(path))
+    {
+        wlr_log(WLR_INFO, "No config found; using the default keybindings");
+        clearBindings();
+        installDefaultBindings();
         return;
+    }
 
     // Compile first: a syntax error must not cost the user their old bindings.
     if (luaL_loadfile(m_lua, path.c_str()) != LUA_OK)
@@ -517,11 +544,13 @@ MuWM::loadConfig()
         wlr_log(WLR_ERROR, "Failed to load Lua config: %s",
                 lua_tostring(m_lua, -1));
         lua_pop(m_lua, 1);
+        failConfig();
         return;
     }
 
     // On reload, bindings the new config no longer sets must go away.
     clearBindings();
+    installDefaultBindings();
     m_eventBus.clear();
 
     if (lua_pcall(m_lua, 0, 0, 0) != LUA_OK)
@@ -529,9 +558,11 @@ MuWM::loadConfig()
         wlr_log(WLR_ERROR, "Failed to run Lua config: %s",
                 lua_tostring(m_lua, -1));
         lua_pop(m_lua, 1);
+        failConfig();
         return;
     }
     wlr_log(WLR_INFO, "Lua config loaded from %s", path.c_str());
+    m_eventBus.emit(EventType::ConfigReload);
 }
 
 void
@@ -539,7 +570,8 @@ MuWM::initLuaBindings()
 {
     // The proxies keep raw pointers to these, so they must outlive this
     // function (locals would dangle as soon as it returned).
-    static Group rootGroup, optsGroup, borderGroup, keymapGroup, keyboardGroup;
+    static Group rootGroup, optsGroup, borderGroup, keymapGroup, keyboardGroup,
+        touchpadGroup;
 
     auto &kb = m_config.keyboard;
     auto &bd = m_config.border;
@@ -551,26 +583,37 @@ MuWM::initLuaBindings()
     };
 
     keyboardGroup.fields = {
-        stringField("rules", &kb.rules),
-        stringField("model", &kb.model),
-        stringField("layout", &kb.layout),
-        stringField("variant", &kb.variant),
-        stringField("xkb_options", &kb.xkb_options),
-        intField("repeat_rate", &kb.repeat_rate),
-        intField("repeat_delay", &kb.repeat_delay),
+        stringField("rules", &kb.rules, MuWM::ChangeKeyboard),
+        stringField("model", &kb.model, MuWM::ChangeKeyboard),
+        stringField("layout", &kb.layout, MuWM::ChangeKeyboard),
+        stringField("variant", &kb.variant, MuWM::ChangeKeyboard),
+        stringField("xkb_options", &kb.xkb_options, MuWM::ChangeKeyboard),
+        intField("repeat_rate", &kb.repeat_rate, INT_MIN, INT_MAX,
+                 MuWM::ChangeKeyboard),
+        intField("repeat_delay", &kb.repeat_delay, INT_MIN, INT_MAX,
+                 MuWM::ChangeKeyboard),
     };
 
     optsGroup.fields = {
         subField("keyboard", &keyboardGroup),
+        subField("touchpad", &touchpadGroup),
         intField("gap", &m_config.gap, 0, 1000, MuWM::ChangeLayout),
         subField("border", &borderGroup),
     };
 
-    keymapGroup.fields = {funcField("set", luaBind)};
+    touchpadGroup.fields = {
+        boolField("natural_scroll", &m_config.touchpad.natural_scroll,
+                  MuWM::ChangePointer),
+        boolField("tap_to_click", &m_config.touchpad.tap_to_click,
+                  MuWM::ChangePointer),
+    };
 
     rootGroup.fields = {
-        subField("keymap", &keymapGroup),
+
+        // muwm subtables
         subField("opts", &optsGroup),
+
+        // MuWM methods
         funcField("focus_next", luaCall<&MuWM::focusNext>),
         funcField("focus_prev", luaCall<&MuWM::focusPrev>),
         funcField("swap_next", luaCall<&MuWM::swapNext>),
@@ -579,6 +622,9 @@ MuWM::initLuaBindings()
         funcField("quit", luaCall<&MuWM::quit>),
         funcField("reload", luaCall<&MuWM::loadConfig>),
         funcField("spawn", luaSpawn),
+        funcField("keybind", &keyBind),
+
+        // Event handlers
         funcField("on", luaOn<false>),
         funcField("once", luaOn<true>),
         funcField("off", luaOff),

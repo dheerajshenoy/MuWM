@@ -4,6 +4,7 @@
 #include "Keyboard.hpp"
 #include "LayerShellSurface.hpp"
 #include "Output.hpp"
+#include "Pointer.hpp"
 #include "Toplevel.hpp"
 
 #include <csignal>
@@ -304,6 +305,11 @@ MuWM::handleNewInput(wlr_input_device *device)
     if (device->type == WLR_INPUT_DEVICE_POINTER)
     {
         wlr_cursor_attach_input_device(m_cursor, device);
+
+        auto *p = new Pointer{this, device};
+        p->destroy.bind<&Pointer::onDestroy>(&device->events.destroy, p);
+        m_pointers.push_back(p);
+        applyPointerConfig(p);
         return;
     }
     if (device->type != WLR_INPUT_DEVICE_KEYBOARD)
@@ -311,14 +317,33 @@ MuWM::handleNewInput(wlr_input_device *device)
 
     wlr_keyboard *kb = wlr_keyboard_from_input_device(device);
 
-    xkb_context *ctx = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
+    auto *k = new Keyboard{this, kb};
+    k->key.bind<&Keyboard::onKey>(&kb->events.key, k);
+    k->modifiers.bind<&Keyboard::onModifiers>(&kb->events.modifiers, k);
+    k->destroy.bind<&Keyboard::onDestroy>(&kb->base.events.destroy, k);
+    m_keyboards.push_back(k);
+    applyKeyboardConfig(k);
 
-    const auto &kc = m_config.keyboard;
-    auto opt       = [](const std::string &s)
+    wlr_seat_set_keyboard(m_seat, kb);
+
+    Toplevel *t = focusedToplevel();
+    if (t && !m_seat->keyboard_state.focused_surface)
+        wlr_seat_keyboard_notify_enter(m_seat, t->xdg->base->surface,
+                                       kb->keycodes, kb->num_keycodes,
+                                       &kb->modifiers);
+}
+
+void
+MuWM::applyKeyboardConfig(Keyboard *keyboard)
+{
+    wlr_keyboard *kb = keyboard->kb;
+    const auto &kc   = m_config.keyboard;
+
+    // Empty strings mean "use the xkb default".
+    auto opt = [](const std::string &s)
     {
         return s.empty() ? nullptr : s.c_str();
     };
-
     xkb_rule_names names = {};
     names.rules          = opt(kc.rules);
     names.model          = opt(kc.model);
@@ -326,47 +351,140 @@ MuWM::handleNewInput(wlr_input_device *device)
     names.variant        = opt(kc.variant);
     names.options        = opt(kc.xkb_options);
 
+    xkb_context *ctx = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
     xkb_keymap *km
         = xkb_keymap_new_from_names(ctx, &names, XKB_KEYMAP_COMPILE_NO_FLAGS);
-    if (!km)
+    bool configured = km != nullptr;
+    if (!km && !kb->keymap)
     {
+        // A new keyboard needs some keymap; an existing one keeps its old one.
         wlr_log(WLR_ERROR,
                 "invalid keyboard layout/variant; using system defaults");
         km = xkb_keymap_new_from_names(ctx, nullptr,
                                        XKB_KEYMAP_COMPILE_NO_FLAGS);
     }
-    wlr_log(WLR_DEBUG, "keyboard %s: layout=%s variant=%s options=%s",
-            device->name, kc.layout.c_str(), kc.variant.c_str(),
-            kc.xkb_options.c_str());
-    wlr_keyboard_set_keymap(kb, km);
-    xkb_keymap_unref(km);
+
+    if (km)
+    {
+        if (configured)
+            wlr_log(WLR_DEBUG, "keyboard %s: layout=%s variant=%s options=%s",
+                    kb->base.name, kc.layout.c_str(), kc.variant.c_str(),
+                    kc.xkb_options.c_str());
+        wlr_keyboard_set_keymap(kb, km);
+        xkb_keymap_unref(km);
+    }
+    else
+    {
+        wlr_log(WLR_ERROR,
+                "invalid keyboard layout/variant; keeping the "
+                "current keymap for %s",
+                kb->base.name);
+    }
     xkb_context_unref(ctx);
-    wlr_keyboard_set_repeat_info(
-        kb, kc.repeat_rate, kc.repeat_delay); // replaces the hardcoded 25, 600
 
-    wlr_seat_set_keyboard(m_seat, kb);
+    wlr_keyboard_set_repeat_info(kb, kc.repeat_rate, kc.repeat_delay);
+}
 
-    Toplevel *t = focusedToplevel();
+void
+MuWM::applyPointerConfig(Pointer *pointer)
+{
+    // Only libinput devices have these settings (not the nested or headless
+    // backends).
+    if (!wlr_input_device_is_libinput(pointer->device))
+        return;
+    libinput_device *dev = wlr_libinput_get_device_handle(pointer->device);
 
-    if (t && !m_seat->keyboard_state.focused_surface)
-        wlr_seat_keyboard_notify_enter(m_seat, t->xdg->base->surface,
-                                       kb->keycodes, kb->num_keycodes,
-                                       &kb->modifiers);
+    // Always write the full state: turning an option off must take effect too.
+    if (libinput_device_config_scroll_has_natural_scroll(dev))
+        libinput_device_config_scroll_set_natural_scroll_enabled(
+            dev, m_config.touchpad.natural_scroll);
 
-    auto *k = new Keyboard{this, kb};
-    k->key.bind<&Keyboard::onKey>(&kb->events.key, k);
-    k->modifiers.bind<&Keyboard::onModifiers>(&kb->events.modifiers, k);
-    k->destroy.bind<&Keyboard::onDestroy>(&kb->base.events.destroy, k);
+    if (libinput_device_config_tap_get_finger_count(dev) > 0)
+        libinput_device_config_tap_set_enabled(
+            dev, m_config.touchpad.tap_to_click ? LIBINPUT_CONFIG_TAP_ENABLED
+                                                : LIBINPUT_CONFIG_TAP_DISABLED);
+}
+
+// Re-applies the settings to every existing device of the affected kinds.
+void
+MuWM::applyDeviceConfig(int changes)
+{
+    if (changes & ChangeKeyboard)
+        for (Keyboard *k : m_keyboards)
+            applyKeyboardConfig(k);
+    if (changes & ChangePointer)
+        for (Pointer *p : m_pointers)
+            applyPointerConfig(p);
+}
+
+void
+MuWM::removeKeyboard(Keyboard *keyboard)
+{
+    std::erase(m_keyboards, keyboard);
+}
+
+void
+MuWM::removePointer(Pointer *pointer)
+{
+    std::erase(m_pointers, pointer);
+}
+
+// Built-in bindings that exist even with no config. A config can rebind them
+// (same key), and they are put back if the config fails to load.
+void
+MuWM::installDefaultBindings()
+{
+    constexpr uint32_t mods = WLR_MODIFIER_LOGO | WLR_MODIFIER_SHIFT;
+
+    Binding quitKey;
+    quitKey.mods   = mods;
+    quitKey.sym    = XKB_KEY_c;
+    quitKey.native = [this]
+    {
+        quit();
+    };
+    addBinding(std::move(quitKey));
+
+    // $TERMINAL may include arguments, hence the unquoted expansion. Without
+    // it, try a few common terminals.
+    Binding terminalKey;
+    terminalKey.mods   = mods;
+    terminalKey.sym    = XKB_KEY_Return;
+    terminalKey.native = [this]
+    {
+        spawn("if [ -n \"$TERMINAL\" ]; then exec $TERMINAL; fi; "
+              "for t in foot kitty alacritty xterm; do "
+              "command -v \"$t\" >/dev/null 2>&1 && exec \"$t\"; done");
+    };
+    addBinding(std::move(terminalKey));
+}
+
+void
+MuWM::failConfig()
+{
+    // A half-run config may have rebound the defaults; make sure a way to
+    // quit and to open a terminal exists.
+    installDefaultBindings();
+    wlr_log(WLR_ERROR, "Config failed to load; default keybindings restored "
+                       "(Super+Shift+C quits)");
 }
 
 bool
 MuWM::handleKeybinding(uint32_t mods, xkb_keysym_t sym)
 {
     sym = xkb_keysym_to_lower(sym);
+
     for (const Binding &b : m_keybindings)
     {
         if (b.mods != mods || b.sym != sym)
             continue;
+
+        if (b.native)
+        {
+            const auto action = b.native; // the action may change the bindings
+            action();
+            return true;
+        }
 
         lua_rawgeti(m_lua, LUA_REGISTRYINDEX,
                     b.ref); // read b.ref *before* calling:
@@ -627,7 +745,8 @@ MuWM::onNewLayerShellSurface(void *data)
 {
     auto *ls = static_cast<wlr_layer_surface_v1 *>(data);
 
-    // The client may leave the output unspecified; the compositor must pick.
+    // The client may leave the output unspecified; the compositor must
+    // pick.
     if (!ls->output)
         ls->output = wlr_output_layout_get_center_output(m_layout);
     if (!ls->output)
@@ -735,8 +854,12 @@ MuWM::applyPending()
 
     if (changes & ChangeLayout)
         arrange();
+
     if (changes & ChangeRecolor)
         recolorBorders();
+
+    if (changes & (ChangeKeyboard | ChangePointer))
+        applyDeviceConfig(changes);
 }
 
 void
@@ -754,9 +877,11 @@ MuWM::addBinding(Binding b)
     for (Binding &existing : m_keybindings)
         if (existing.mods == b.mods && existing.sym == b.sym)
         {
-            luaL_unref(m_lua, LUA_REGISTRYINDEX, existing.ref);
-            wlr_log(WLR_INFO, "Replacing keybinding for sym 0x%x", b.sym);
-            existing.ref = b.ref;
+            if (existing.ref != LUA_NOREF)
+                luaL_unref(m_lua, LUA_REGISTRYINDEX, existing.ref);
+            wlr_log(WLR_DEBUG, "Replacing keybinding for sym 0x%x", b.sym);
+            existing.ref    = b.ref;
+            existing.native = std::move(b.native);
             return;
         }
     m_keybindings.push_back(b);
@@ -767,7 +892,8 @@ MuWM::clearBindings()
 {
     wlr_log(WLR_DEBUG, "Clearing %zu keybindings", m_keybindings.size());
     for (const Binding &b : m_keybindings)
-        luaL_unref(m_lua, LUA_REGISTRYINDEX, b.ref);
+        if (b.ref != LUA_NOREF)
+            luaL_unref(m_lua, LUA_REGISTRYINDEX, b.ref);
     m_keybindings.clear();
 }
 
@@ -824,9 +950,9 @@ MuWM::swapPrev()
     const int i   = focusedIndex(ws);
     if (i < 0)
         return;
-    std::swap(ws->toplevels[i],
-              ws->toplevels[(i + ws->toplevels.size() - 1)
-                            % ws->toplevels.size()]);
+    std::swap(
+        ws->toplevels[i],
+        ws->toplevels[(i + ws->toplevels.size() - 1) % ws->toplevels.size()]);
     arrange(ws);
 }
 

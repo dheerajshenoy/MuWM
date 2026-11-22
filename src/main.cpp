@@ -1,4 +1,5 @@
 #include "MuWM.hpp"
+#include "Logging.hpp"
 
 void
 initArgs(argparse::ArgumentParser &parser)
@@ -25,7 +26,7 @@ main(int argc, char **argv)
         return 1;
     }
 
-    wlr_log_init(WLR_DEBUG, NULL);
+    initLogging(WLR_INFO); // MUWM_LOG=debug for more
 
     MuWM wm(parser);
     if (!wm.ok())

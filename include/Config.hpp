@@ -21,4 +21,10 @@ struct Config
         int repeat_rate  = 25;
         int repeat_delay = 600;
     } keyboard;
+
+    struct TouchpadConfig
+    {
+        bool natural_scroll = true;
+        bool tap_to_click    = true;
+    } touchpad;
 };

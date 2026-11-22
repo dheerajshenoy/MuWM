@@ -14,6 +14,8 @@
 
 class MuWM;
 struct LayerShellSurface;
+struct Keyboard;
+struct Pointer;
 
 struct OutputListener
 {
@@ -53,11 +55,21 @@ public:
 
     enum Change
     {
-        ChangeNone    = 0,
-        ChangeLayout  = 1 << 0, // gaps, border width
-        ChangeRecolor = 1 << 1, // border colors
+        ChangeNone     = 0,
+        ChangeLayout   = 1 << 0, // gaps, border width
+        ChangeRecolor  = 1 << 1, // border colors
+        ChangePointer  = 1 << 2, // touchpad / pointer options
+        ChangeKeyboard = 1 << 3, // keymap, repeat rate
     };
     void scheduleApply(int changes);
+
+    // Settings are applied to a device when it appears and again, to every
+    // device of that kind, when the matching option changes.
+    void applyKeyboardConfig(Keyboard *keyboard);
+    void applyPointerConfig(Pointer *pointer);
+    void applyDeviceConfig(int changes);
+    void removeKeyboard(Keyboard *keyboard);
+    void removePointer(Pointer *pointer);
 
     // layer-shell
     void arrangeLayers(wlr_output *output);
@@ -113,6 +125,8 @@ private:
 
 private:
     bool m_ok = false;
+    void failConfig();
+    void installDefaultBindings();
     const argparse::ArgumentParser &m_parser;
 
     wl_display *m_display                        = nullptr;
@@ -130,6 +144,8 @@ private:
     wlr_layer_shell_v1 *m_layerShell             = nullptr;
     Output *m_focusedOutput                      = nullptr;
     std::vector<Output *> m_outputs;
+    std::vector<Keyboard *> m_keyboards;
+    std::vector<Pointer *> m_pointers;
     Workspace m_unassigned; // for toplevels that don't have an output yet
 
     OutputListener m_outputListener;

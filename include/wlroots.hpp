@@ -30,5 +30,6 @@ extern "C"
 #include <wlr/types/wlr_xdg_shell.h>
 #include <wlr/util/log.h>
 #include <xkbcommon/xkbcommon.h>
+#include <wlr/backend/libinput.h>
 #undef static
 }

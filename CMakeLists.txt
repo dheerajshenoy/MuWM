@@ -11,6 +11,7 @@ pkg_check_modules(DEPS REQUIRED IMPORTED_TARGET
     wayland-server
     wlroots-0.20
     xkbcommon
+    libinput
 )
 
 find_package(Lua REQUIRED)
@@ -60,9 +61,11 @@ add_executable(${PROJECT_NAME}
     src/Output.cpp
     src/Toplevel.cpp
     src/Keyboard.cpp
+    src/Pointer.cpp
     src/LayerShellSurface.cpp
     src/Decoration.cpp
     src/EventBus.cpp
+    src/Logging.cpp
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE

@@ -4,6 +4,7 @@ enum class EventType
 {
     Startup = 0,
     Shutdown,
+    ConfigReload,
 
     // Window events
     WindowOpen,
@@ -23,7 +24,4 @@ enum class EventType
     WorkspaceRename,
     WorkspaceReorder,
     WorkspaceMoveWindow,
-
-    // Other events
-    ConfigReload,
 };
