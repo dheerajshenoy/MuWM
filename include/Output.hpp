@@ -3,6 +3,7 @@
 #include "Listener.hpp"
 #include "wlroots.hpp"
 
+struct Workspace;
 class MuWM;
 
 struct Output
@@ -14,6 +15,7 @@ struct Output
     Listener<Output> frame;
     Listener<Output> destroy;
     Listener<Output> requestState;
+    Workspace *workspace = nullptr;
 
     void onFrame(void *data);
     void onDestroy(void *data);

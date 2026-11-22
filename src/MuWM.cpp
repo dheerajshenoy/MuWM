@@ -219,6 +219,24 @@ MuWM::handleNewOutput(wlr_output *output)
     o->destroy.bind<&Output::onDestroy>(&output->events.destroy, o);
     o->requestState.bind<&Output::onRequestState>(&output->events.request_state,
                                                   o);
+    o->workspace         = new Workspace{};
+    o->workspace->output = o;
+    m_outputs.push_back(o);
+    if (!m_focusedOutput)
+        m_focusedOutput = o;
+
+    // adopt windows that mapped too early
+    if (m_outputs.size() == 1)
+    {
+        for (Toplevel *t : m_unassigned.toplevels)
+            t->workspace = o->workspace;
+        o->workspace->toplevels       = std::move(m_unassigned.toplevels);
+        o->workspace->focusedToplevel = m_unassigned.focusedToplevel;
+        m_unassigned                  = {};
+    }
+
+    arrangeLayers(output);
+    arrange(o->workspace);
 
     wlr_log(WLR_INFO, "New output: %s", output->name);
 }
@@ -328,8 +346,10 @@ MuWM::handleNewInput(wlr_input_device *device)
 
     wlr_seat_set_keyboard(m_seat, kb);
 
-    if (m_focused && !m_seat->keyboard_state.focused_surface)
-        wlr_seat_keyboard_notify_enter(m_seat, m_focused->xdg->base->surface,
+    Toplevel *t = focusedToplevel();
+
+    if (t && !m_seat->keyboard_state.focused_surface)
+        wlr_seat_keyboard_notify_enter(m_seat, t->xdg->base->surface,
                                        kb->keycodes, kb->num_keycodes,
                                        &kb->modifiers);
 
@@ -360,19 +380,34 @@ MuWM::handleKeybinding(uint32_t mods, xkb_keysym_t sym)
     return false;
 }
 
+Workspace *
+MuWM::currentWorkspace()
+{
+    return m_focusedOutput ? m_focusedOutput->workspace : &m_unassigned;
+}
+
 void
 MuWM::focusToplevel(Toplevel *t)
 {
-    if (m_focused == t)
+    Toplevel *oldFocus = focusedToplevel();
+
+    if (oldFocus == t)
         return;
-    if (m_focused)
+    if (oldFocus)
     {
-        wlr_xdg_toplevel_set_activated(m_focused->xdg, false);
-        m_focused->setFocused(false);
+        wlr_xdg_toplevel_set_activated(oldFocus->xdg, false);
+        oldFocus->setFocused(false);
     }
-    m_focused = t;
     if (!t)
+    {
+        currentWorkspace()->focusedToplevel = nullptr;
         return;
+    }
+
+    Workspace *ws = t->workspace;
+    if (ws->output)
+        m_focusedOutput = ws->output;
+    ws->focusedToplevel = t;
 
     t->setFocused(true);
     wlr_scene_node_raise_to_top(&t->tree->node);
@@ -386,31 +421,51 @@ MuWM::focusToplevel(Toplevel *t)
 void
 MuWM::addToplevel(Toplevel *t)
 {
-    if (std::find(m_toplevels.begin(), m_toplevels.end(), t)
-        == m_toplevels.end())
-        m_toplevels.push_back(t);
-    arrange();
+    if (!t->workspace)
+        t->workspace = currentWorkspace();
+
+    auto &toplevels = t->workspace->toplevels;
+    if (std::find(toplevels.begin(), toplevels.end(), t) == toplevels.end())
+        toplevels.push_back(t);
+
+    arrange(t->workspace);
     focusToplevel(t);
 }
 
 void
 MuWM::removeToplevel(Toplevel *t)
 {
-    std::erase(m_toplevels, t);
-    if (m_focused == t)
-        m_focused = nullptr;
-    arrange();
-    if (!m_focused && !m_toplevels.empty())
-        focusToplevel(m_toplevels.back());
+    Workspace *ws = t->workspace;
+    if (!ws)
+        return;
+
+    auto &toplevels = ws->toplevels;
+
+    std::erase(toplevels, t);
+    t->workspace = nullptr;
+    if (ws->focusedToplevel == t)
+        ws->focusedToplevel = nullptr;
+    arrange(ws);
+    if (ws == currentWorkspace() && !ws->focusedToplevel && !toplevels.empty())
+        focusToplevel(toplevels.back());
 }
 
 void
 MuWM::arrange()
 {
-    wlr_box area;
-    wlr_output_layout_get_box(m_layout, nullptr,
-                              &area); // nullptr = bounding box of all outputs
-    if (area.width <= 0 || m_toplevels.empty())
+    for (Output *output : m_outputs)
+    {
+        arrangeLayers(output->output);
+        arrange(output->workspace);
+    }
+}
+
+void
+MuWM::arrange(Workspace *ws)
+{
+    wlr_box area    = ws->output ? ws->output->usableArea : wlr_box{};
+    auto &toplevels = ws->toplevels;
+    if (area.width <= 0 || toplevels.empty())
         return;
 
     int gap = m_config.gap;
@@ -426,16 +481,16 @@ MuWM::arrange()
         t->resizeBorders(w, h);
     };
 
-    const int n = static_cast<int>(m_toplevels.size());
+    const int n = static_cast<int>(toplevels.size());
     if (n == 1)
     {
-        place(m_toplevels[0], area.x, area.y, area.width, area.height);
+        place(toplevels[0], area.x, area.y, area.width, area.height);
         return;
     }
 
     const int masterW = (area.width - gap) * 55 / 100;
     const int stackW  = area.width - gap - masterW;
-    place(m_toplevels[0], area.x, area.y, masterW, area.height);
+    place(toplevels[0], area.x, area.y, masterW, area.height);
 
     // Integer division would leave the remainder as empty space under the
     // stack, so hand one extra pixel to each of the first `rem` windows.
@@ -447,7 +502,7 @@ MuWM::arrange()
     for (int i = 1; i < n; i++)
     {
         const int hi = h + (i - 1 < rem ? 1 : 0);
-        place(m_toplevels[i], area.x + masterW + gap, y, stackW, hi);
+        place(toplevels[i], area.x + masterW + gap, y, stackW, hi);
         y += hi + gap;
     }
 }
@@ -585,7 +640,7 @@ MuWM::onNewLayerShellSurface(void *data)
     auto *s         = new LayerShellSurface{};
     s->wm           = this;
     s->layerSurface = ls;
-    s->scene = wlr_scene_layer_surface_v1_create(
+    s->scene        = wlr_scene_layer_surface_v1_create(
         m_layerTrees[ls->pending.layer], ls);
 
     s->map.bind<&LayerShellSurface::onMap>(&ls->surface->events.map, s);
@@ -687,8 +742,10 @@ MuWM::applyPending()
 void
 MuWM::recolorBorders()
 {
-    for (Toplevel *t : m_toplevels)
-        t->setFocused(t == m_focused);
+    Toplevel *focused = focusedToplevel();
+    for (Output *output : m_outputs)
+        for (Toplevel *t : output->workspace->toplevels)
+            t->setFocused(t == focused);
 }
 
 void
@@ -720,67 +777,86 @@ MuWM::quit()
     wl_display_terminate(m_display);
 }
 
+// Index of the focused window in `ws`, or -1.
+static int
+focusedIndex(const Workspace *ws)
+{
+    for (size_t i = 0; i < ws->toplevels.size(); i++)
+        if (ws->toplevels[i] == ws->focusedToplevel)
+            return static_cast<int>(i);
+    return -1;
+}
+
 void
 MuWM::focusNext()
 {
-    for (size_t i = 0; i < m_toplevels.size(); i++)
-    {
-        if (m_toplevels[i] == m_focused)
-        {
-            focusToplevel(m_toplevels[(i + 1) % m_toplevels.size()]);
-            return;
-        }
-    }
+    Workspace *ws = currentWorkspace();
+    const int i   = focusedIndex(ws);
+    if (i >= 0)
+        focusToplevel(ws->toplevels[(i + 1) % ws->toplevels.size()]);
 }
 
 void
 MuWM::focusPrev()
 {
-    for (size_t i = 0; i < m_toplevels.size(); i++)
-    {
-        if (m_toplevels[i] == m_focused)
-        {
-            focusToplevel(
-                m_toplevels[(i + m_toplevels.size() - 1) % m_toplevels.size()]);
-            return;
-        }
-    }
+    Workspace *ws = currentWorkspace();
+    const int i   = focusedIndex(ws);
+    if (i >= 0)
+        focusToplevel(ws->toplevels[(i + ws->toplevels.size() - 1)
+                                    % ws->toplevels.size()]);
 }
 
 void
 MuWM::swapNext()
 {
-    for (size_t i = 0; i < m_toplevels.size(); i++)
-    {
-        if (m_toplevels[i] == m_focused)
-        {
-            std::swap(m_toplevels[i],
-                      m_toplevels[(i + 1) % m_toplevels.size()]);
-            arrange();
-            return;
-        }
-    }
+    Workspace *ws = currentWorkspace();
+    const int i   = focusedIndex(ws);
+    if (i < 0)
+        return;
+    std::swap(ws->toplevels[i], ws->toplevels[(i + 1) % ws->toplevels.size()]);
+    arrange(ws);
 }
 
 void
 MuWM::swapPrev()
 {
-    for (size_t i = 0; i < m_toplevels.size(); i++)
-    {
-        if (m_toplevels[i] == m_focused)
-        {
-            std::swap(
-                m_toplevels[i],
-                m_toplevels[(i + m_toplevels.size() - 1) % m_toplevels.size()]);
-            arrange();
-            return;
-        }
-    }
+    Workspace *ws = currentWorkspace();
+    const int i   = focusedIndex(ws);
+    if (i < 0)
+        return;
+    std::swap(ws->toplevels[i],
+              ws->toplevels[(i + ws->toplevels.size() - 1)
+                            % ws->toplevels.size()]);
+    arrange(ws);
 }
 
 void
 MuWM::close()
 {
-    if (m_focused)
-        wlr_xdg_toplevel_send_close(m_focused->xdg);
+    if (Toplevel *t = focusedToplevel())
+        wlr_xdg_toplevel_send_close(t->xdg);
+}
+
+void
+MuWM::removeOutput(Output *output)
+{
+    std::erase(m_outputs, output);
+    Workspace *target
+        = m_outputs.empty() ? &m_unassigned : m_outputs.front()->workspace;
+
+    for (Toplevel *t : output->workspace->toplevels)
+    {
+        t->workspace = target;
+        target->toplevels.push_back(t);
+    }
+
+    if (!target->focusedToplevel)
+        target->focusedToplevel = output->workspace->focusedToplevel;
+
+    output->workspace->toplevels.clear();
+    output->workspace->focusedToplevel = nullptr;
+
+    if (m_focusedOutput == output)
+        m_focusedOutput = m_outputs.empty() ? nullptr : m_outputs.front();
+    arrange(target);
 }

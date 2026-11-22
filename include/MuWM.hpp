@@ -5,6 +5,7 @@
 #include "EventBus.hpp"
 #include "Listener.hpp"
 #include "Toplevel.hpp"
+#include "Workspace.hpp"
 #include "argparse.hpp"
 #include "lua.hpp"
 #include "wlroots.hpp"
@@ -38,6 +39,8 @@ public:
     void addToplevel(Toplevel *t);
     void removeToplevel(Toplevel *t);
     void arrange();
+    void arrange(Workspace *workspace);
+    void removeOutput(Output *output);
     void loadConfig();
     void quit();
 
@@ -84,6 +87,13 @@ public:
         return m_config;
     }
 
+    Workspace *currentWorkspace();
+    Toplevel *focusedToplevel()
+    {
+        return currentWorkspace() ? currentWorkspace()->focusedToplevel
+                                  : nullptr;
+    }
+
 private:
     bool init();
     void handleNewOutput(wlr_output *output);
@@ -118,7 +128,9 @@ private:
     wlr_xcursor_manager *m_xcursor               = nullptr;
     wlr_xdg_decoration_manager_v1 *m_decoManager = nullptr;
     wlr_layer_shell_v1 *m_layerShell             = nullptr;
-    Toplevel *m_focused                          = nullptr;
+    Output *m_focusedOutput                      = nullptr;
+    std::vector<Output *> m_outputs;
+    Workspace m_unassigned; // for toplevels that don't have an output yet
 
     OutputListener m_outputListener;
 
@@ -134,7 +146,6 @@ private:
     Listener<MuWM> m_newDecoration;
 
     Config m_config;
-    std::vector<Toplevel *> m_toplevels;
     std::vector<LayerShellSurface *> m_layerSurfaces;
 
     // Stacking order, bottom to top: background, bottom, windows, top, overlay.

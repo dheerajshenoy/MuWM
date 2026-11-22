@@ -3,6 +3,7 @@
 #include "Listener.hpp"
 #include "wlroots.hpp"
 
+struct Workspace;
 class MuWM;
 
 struct Toplevel
@@ -15,6 +16,7 @@ struct Toplevel
     Listener<Toplevel> unmap;
     Listener<Toplevel> commit;
     Listener<Toplevel> destroy;
+    Workspace *workspace = nullptr;
 
     void onMap(void *data);
     void onUnmap(void *data);

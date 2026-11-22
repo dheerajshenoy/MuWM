@@ -15,6 +15,9 @@ void
 Output::onDestroy(void *)
 {
     wm->closeLayerSurfacesOn(output);
+    wm->removeOutput(this);
+    delete workspace;
+    workspace = nullptr;
     output->data = nullptr;
     frame.unbind();
     requestState.unbind();
