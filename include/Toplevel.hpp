@@ -18,6 +18,8 @@ struct Toplevel
     Listener<Toplevel> destroy;
     Workspace *workspace = nullptr;
 
+    uint64_t id = 0;
+
     void onMap(void *data);
     void onUnmap(void *data);
     void onCommit(void *data);

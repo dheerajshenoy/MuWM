@@ -40,7 +40,8 @@ Tiling Wayland compositor in C++ on wlroots (CMake).
 ## Layout and windows
 
 - [x] Per-output layout instead of the bounding box of all outputs (multi-monitor)
-- [ ] Workspaces / tags
+- [x] Workspaces
+- [ ] Tags
 - [ ] Window rules (match on app_id / title)
 - [ ] More layouts (monocle, grid) and a way to switch
 - [ ] Respect client min / max size
@@ -48,8 +49,8 @@ Tiling Wayland compositor in C++ on wlroots (CMake).
 
 ## Desktop protocols
 
-- [ ] wlr-layer-shell (bars, launchers such as waybar, fuzzel)
-- [ ] xdg-output and output management (wlr-randr, kanshi)
+- [x] wlr-layer-shell (bars, launchers such as waybar, fuzzel)
+- [x] xdg-output and output management (wlr-randr, kanshi)
 - [ ] Screen capture (screencopy / ext-image-copy-capture) and xdg-desktop-portal-wlr
 - [ ] Session lock (swaylock), idle-notify, idle-inhibit
 - [ ] primary-selection and data-control (clipboard managers)
@@ -61,7 +62,7 @@ Tiling Wayland compositor in C++ on wlroots (CMake).
 - [ ] Run from a TTY (DRM/KMS backend, libseat)
 - [ ] Output and input hotplug (add and remove)
 - [ ] Session entry: `/usr/share/wayland-sessions/muwm.desktop`, `XDG_CURRENT_DESKTOP`, `XDG_SESSION_TYPE`, dbus activation environment
-- [ ] Touchpad settings via libinput (tap-to-click, natural scroll)
+- [x] Touchpad settings via libinput (tap-to-click, natural scroll)
 
 ## Quality and packaging
 

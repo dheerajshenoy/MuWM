@@ -3,6 +3,8 @@
 
 #include "MuWM.hpp"
 
+#include <variant>
+
 #include <cctype>
 #include <climits>
 #include <cmath>
@@ -250,6 +252,47 @@ setField(lua_State *L, const Group *g, const char *key, int val)
 }
 
 void
+pushWindow(lua_State *L, const WindowInfo &w)
+{
+    lua_createtable(L, 0, 8);
+    lua_pushinteger(L, static_cast<lua_Integer>(w.id));
+    lua_setfield(L, -2, "id");
+    lua_pushstring(L, w.title.c_str());
+    lua_setfield(L, -2, "title");
+    lua_pushstring(L, w.appId.c_str());
+    lua_setfield(L, -2, "app_id");
+    lua_pushinteger(L, w.width);
+    lua_setfield(L, -2, "width");
+    lua_pushinteger(L, w.height);
+    lua_setfield(L, -2, "height");
+    lua_pushstring(L, w.workspace.c_str());
+    lua_setfield(L, -2, "workspace");
+    lua_pushstring(L, w.output.c_str());
+    lua_setfield(L, -2, "output");
+    lua_pushboolean(L, w.focused);
+    lua_setfield(L, -2, "focused");
+}
+
+// Pushes the handler arguments for an event; returns how many.
+int
+pushEventData(lua_State *L, const EventData &data)
+{
+    return std::visit(
+        [L](const auto &d) -> int
+        {
+            using T = std::decay_t<decltype(d)>;
+            if constexpr (std::is_same_v<T, std::monostate>)
+                return 0;
+            else if constexpr (std::is_same_v<T, WindowInfo>)
+            {
+                pushWindow(L, d);
+                return 1;
+            }
+        },
+        data);
+}
+
+void
 pushColor(lua_State *L, const float c[4])
 {
     lua_createtable(L, 4, 0);
@@ -440,6 +483,22 @@ struct EventName
 constexpr EventName kEventNames[] = {
     {"startup", EventType::Startup},
     {"config_reload", EventType::ConfigReload},
+    {"window_open", EventType::WindowOpen},
+    {"window_close", EventType::WindowClose},
+    // TODO: Add the rest
+    // {"window_focus", EventType::WindowFocus},
+    // {"window_unfocus", EventType::WindowUnfocus},
+    // {"window_move", EventType::WindowMove},
+    // {"window_resize", EventType::WindowResize},
+    // {"window_minimize", EventType::WindowMinimize},
+    // {"window_maximize", EventType::WindowMaximize},
+    // {"window_fullscreen", EventType::WindowFullscreen},
+    // {"workspace_change", EventType::WorkspaceChange},
+    // {"workspace_add", EventType::WorkspaceAdd},
+    // {"workspace_remove", EventType::WorkspaceRemove},
+    // {"workspace_rename", EventType::WorkspaceRename},
+    // {"workspace_reorder", EventType::WorkspaceReorder},
+    // {"workspace_move_window", EventType::WorkspaceMoveWindow},
 };
 
 std::expected<EventType, const char *>
@@ -472,12 +531,13 @@ mainThread(lua_State *L)
 }
 
 void
-callRef(lua_State *L, int ref)
+callRef(lua_State *L, int ref, const EventData &data)
 {
     lua_pushcfunction(L, traceback);
     const int msgh = lua_gettop(L);
     lua_rawgeti(L, LUA_REGISTRYINDEX, ref);
-    if (lua_pcall(L, 0, 0, msgh) != LUA_OK)
+    const int nargs = pushEventData(L, data);
+    if (lua_pcall(L, nargs, 0, msgh) != LUA_OK)
     {
         wlr_log(WLR_ERROR, "event handler: %s", lua_tostring(L, -1));
         lua_pop(L, 1);
@@ -502,8 +562,9 @@ luaOn(lua_State *L)
     auto ref = std::make_shared<LuaRef>(mainThread(L),
                                         luaL_ref(L, LUA_REGISTRYINDEX));
 
-    const int id = wmFrom(L)->eventBus().add(type, [ref](void *)
-    { callRef(ref->L, ref->ref); }, Once);
+    const int id = wmFrom(L)->eventBus().add(
+        type, [ref](const EventData &data)
+        { callRef(ref->L, ref->ref, data); }, Once);
     lua_pushinteger(L, id);
     return 1;
 }

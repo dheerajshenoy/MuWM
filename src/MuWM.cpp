@@ -160,6 +160,7 @@ MuWM::init()
 
     wlr_compositor_create(m_display, 5, m_renderer);
     wlr_subcompositor_create(m_display);
+    wlr_xdg_output_manager_v1_create(m_display, m_layout); // bars need it
     wlr_data_device_manager_create(m_display);
 
     m_xdgShell = wlr_xdg_shell_create(m_display, 6);
@@ -301,6 +302,7 @@ MuWM::handleNewToplevel(wlr_xdg_toplevel *xdg)
 {
     auto *t = new Toplevel{this, xdg};
     t->tree = wlr_scene_xdg_surface_create(m_windowTree, xdg->base);
+    t->id   = m_globalTopLevelId++;
 
     for (auto &r : t->border)
         r = wlr_scene_rect_create(t->tree, 1, 1,
@@ -559,6 +561,25 @@ MuWM::focusToplevel(Toplevel *t)
                                        &kb->modifiers);
 }
 
+WindowInfo
+MuWM::windowInfo(const Toplevel *t) const
+{
+    WindowInfo info;
+    info.id     = t->id;
+    info.title  = t->xdg->title ? t->xdg->title : "";
+    info.appId  = t->xdg->app_id ? t->xdg->app_id : "";
+    info.width  = t->xdg->base->surface->current.width;
+    info.height = t->xdg->base->surface->current.height;
+    if (const Workspace *ws = t->workspace)
+    {
+        info.workspace = ws->name;
+        if (ws->output)
+            info.output = ws->output->output->name;
+        info.focused = ws->focusedToplevel == t;
+    }
+    return info;
+}
+
 void
 MuWM::addToplevel(Toplevel *t)
 {
@@ -576,6 +597,9 @@ MuWM::addToplevel(Toplevel *t)
 
     arrange(t->workspace);
     focusToplevel(t);
+
+    if (m_eventBus.hasHandlers(EventType::WindowOpen))
+        m_eventBus.emit(EventType::WindowOpen, windowInfo(t));
 }
 
 void
@@ -584,6 +608,11 @@ MuWM::removeToplevel(Toplevel *t)
     Workspace *ws = t->workspace;
     if (!ws)
         return;
+
+    // Snapshot before the window is detached from its workspace.
+    EventData closed;
+    if (m_eventBus.hasHandlers(EventType::WindowClose))
+        closed = windowInfo(t);
 
     auto &toplevels = ws->toplevels;
 
@@ -594,6 +623,8 @@ MuWM::removeToplevel(Toplevel *t)
     arrange(ws);
     if (ws == currentWorkspace() && !ws->focusedToplevel && !toplevels.empty())
         focusToplevel(toplevels.back());
+
+    m_eventBus.emit(EventType::WindowClose, closed);
 }
 
 void

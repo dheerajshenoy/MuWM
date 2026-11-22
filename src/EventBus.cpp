@@ -34,6 +34,13 @@ EventBus::remove(int id)
     return false;
 }
 
+bool
+EventBus::hasHandlers(EventType type) const
+{
+    auto it = m_handlers.find(type);
+    return it != m_handlers.end() && !it->second.empty();
+}
+
 void
 EventBus::clear()
 {
@@ -44,7 +51,7 @@ EventBus::clear()
 }
 
 void
-EventBus::emit(EventType type, void *data)
+EventBus::emit(EventType type, const EventData &data)
 {
     auto it = m_handlers.find(type);
     if (it == m_handlers.end())

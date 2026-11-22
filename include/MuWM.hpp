@@ -38,6 +38,7 @@ public:
     void handleNewToplevel(wlr_xdg_toplevel *xdg);
     void handleNewInput(wlr_input_device *device);
     void focusToplevel(Toplevel *t);
+    WindowInfo windowInfo(const Toplevel *t) const;
     void addToplevel(Toplevel *t);
     void removeToplevel(Toplevel *t);
     void arrange();
@@ -189,4 +190,7 @@ private:
 
     std::vector<Binding> m_keybindings;
     EventBus m_eventBus;
+
+    uint64_t m_globalTopLevelId
+        = 0; // incremented for each new toplevel, used to identify it in events
 };

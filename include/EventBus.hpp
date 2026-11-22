@@ -1,6 +1,7 @@
 #pragma once
 
 #include "EventType.hpp"
+#include "Events.hpp"
 
 #include <functional>
 #include <memory>
@@ -17,14 +18,17 @@
 class EventBus
 {
 public:
-    using Callback = std::function<void(void *)>;
+    using Callback = std::function<void(const EventData &)>;
 
     // Returns an id usable with remove(). A `once` handler is removed just
     // before its first call.
     int add(EventType type, Callback callback, bool once = false);
     bool remove(int id);
     void clear();
-    void emit(EventType type, void *data = nullptr);
+    void emit(EventType type, const EventData &data = {});
+
+    // Lets emitters skip building a payload nobody is listening for.
+    bool hasHandlers(EventType type) const;
 
 private:
     struct Handler
