@@ -22,6 +22,7 @@ struct Field
     {
         String,
         Bool,
+        Float,
         Int,
         Color,
         Sub,
@@ -57,6 +58,12 @@ Field
 boolField(const char *name, bool *p, int changes = 0)
 {
     return {Field::Bool, name, p, nullptr, changes};
+}
+
+Field
+floatField(const char *name, float *p, int changes = 0)
+{
+    return {Field::Float, name, p, nullptr, changes};
 }
 
 Field
@@ -204,6 +211,14 @@ setField(lua_State *L, const Group *g, const char *key, int val)
 
     switch (f->kind)
     {
+        case Field::Float:
+        {
+            expectType(L, val, LUA_TNUMBER, key, "a number");
+            *static_cast<float *>(f->ptr)
+                = static_cast<float>(lua_tonumber(L, val));
+            break;
+        }
+
         case Field::Int:
         {
             expectType(L, val, LUA_TNUMBER, key, "a number");
@@ -312,6 +327,10 @@ pushField(lua_State *L, const Field *f)
             lua_pushboolean(L, *static_cast<bool *>(f->ptr));
             break;
 
+        case Field::Float:
+            lua_pushnumber(L, *static_cast<float *>(f->ptr));
+            break;
+
         case Field::String:
             lua_pushstring(L, static_cast<std::string *>(f->ptr)->c_str());
             break;
@@ -408,6 +427,14 @@ parseBinding(std::string_view s)
     }
 }
 
+// clang-format off
+/*lua
+  ---Bind a key to a Lua function
+  ---@param spec string The key binding specification, e.g. "Ctrl+Alt+T"
+  ---@param handler fun() The Lua function to call when the key is pressed
+  function mu.keybind(spec, handler) end
+*/
+// clang-format on
 int
 keyBind(lua_State *L)
 {
@@ -425,6 +452,13 @@ keyBind(lua_State *L)
     return 0;
 }
 
+// clang-format off
+/*lua
+  ---Spawn a shell command
+  ---@param cmd string The command to run
+  function mu.spawn(cmd) end
+*/
+// clang-format on
 int
 luaSpawn(lua_State *L)
 {
@@ -432,6 +466,13 @@ luaSpawn(lua_State *L)
     return 0;
 }
 
+// clang-format off
+/*lua
+  ---Focus a workspace by index
+  ---@param index integer The workspace index to focus
+  function mu.focus_workspace(index) end
+*/
+// clang-format on
 int
 luaFocusWorkspace(lua_State *L)
 {
@@ -440,6 +481,26 @@ luaFocusWorkspace(lua_State *L)
     return 0;
 }
 
+// clang-format off
+/*lua
+ *
+*/
+// clang-format on
+int
+luaSetMasterRatio(lua_State *L)
+{
+    auto ratio = static_cast<float>(luaL_checknumber(L, 1));
+    wmFrom(L)->setMasterRatio(ratio);
+    return 0;
+}
+
+// clang-format off
+/*lua
+  ---Move the focused window to a workspace by index
+  ---@param index integer The workspace index to move the window to
+  function mu.window_to_workspace(index) end
+*/
+// clang-format on
 int
 luaWindowToWorkspace(lua_State *L)
 {
@@ -471,6 +532,30 @@ struct LuaRef
     }
 };
 
+// clang-format off
+/*lua
+  ---A color: "#rrggbb", "#rrggbbaa" or a table {r, g, b, a} (0-1 each).
+  ---@alias mu.Color string|number[]
+
+  ---Names accepted by mu.on and mu.once.
+  ---@alias mu.Event
+  ---| "startup" # The compositor is up (fires once, not on reload).
+  ---| "config_reload" # The config was reloaded successfully.
+  ---| "window_open" # A window appeared.
+  ---| "window_close" # A window went away; the table is a snapshot.
+
+  ---Table passed to window event handlers.
+  ---@class mu.Window
+  ---@field id integer Stable id of the window.
+  ---@field title string Window title; may still be empty when it opens.
+  ---@field app_id string Application id (the class), e.g. "foot".
+  ---@field width integer Current surface width in pixels.
+  ---@field height integer Current surface height in pixels.
+  ---@field workspace string Name of the workspace the window is on.
+  ---@field output string Name of the output the window is on.
+  ---@field focused boolean Whether the window had focus.
+*/
+// clang-format on
 struct EventName
 {
     const char *name;
@@ -483,13 +568,13 @@ constexpr EventName kEventNames[] = {
     {"window_open", EventType::WindowOpen},
     {"window_close", EventType::WindowClose},
     // TODO: Add the rest
+    // {"window_fullscreen", EventType::WindowFullscreen},
     // {"window_focus", EventType::WindowFocus},
     // {"window_unfocus", EventType::WindowUnfocus},
     // {"window_move", EventType::WindowMove},
     // {"window_resize", EventType::WindowResize},
     // {"window_minimize", EventType::WindowMinimize},
     // {"window_maximize", EventType::WindowMaximize},
-    // {"window_fullscreen", EventType::WindowFullscreen},
     // {"workspace_change", EventType::WorkspaceChange},
     // {"workspace_add", EventType::WorkspaceAdd},
     // {"workspace_remove", EventType::WorkspaceRemove},
@@ -542,7 +627,21 @@ callRef(lua_State *L, int ref, const EventData &data)
     lua_pop(L, 1); // the traceback function
 }
 
-// mu.on(event, fn) / mu.once(event, fn): returns an id for mu.off().
+// clang-format off
+/*lua
+  ---Register an event handler
+  ---@param event mu.Event The event name
+  ---@param handler fun(window: mu.Window) The handler function; window events pass a table describing the window
+  ---@return integer id The handler ID, which can be used to remove it with mu.off(id)
+  function mu.on(event, handler) end
+
+  ---Register a one-time event handler
+  ---@param event mu.Event The event name
+  ---@param handler fun(window: mu.Window) The handler function; window events pass a table describing the window
+  ---@return integer id The handler ID, which can be used to remove it with mu.off(id)
+  function mu.once(event, handler) end
+*/
+// clang-format on
 template <bool Once>
 int
 luaOn(lua_State *L)
@@ -565,7 +664,14 @@ luaOn(lua_State *L)
     return 1;
 }
 
-// mu.off(id): returns whether a handler was removed.
+// clang-format off
+/*lua
+  ---Remove an event handler by ID
+  ---@param id integer The handler ID returned by mu.on or mu.once
+  ---@return boolean removed Whether a handler was removed
+  function mu.off(id) end
+*/
+// clang-format on
 int
 luaOff(lua_State *L)
 {
@@ -643,67 +749,160 @@ MuWM::initLuaBindings()
 {
     // The proxies keep raw pointers to these, so they must outlive this
     // function (locals would dangle as soon as it returned).
-    static Group rootGroup, optsGroup, borderGroup, keymapGroup, keyboardGroup,
-        touchpadGroup;
+    static Group rootGroup, optsGroup, borderGroup, keyboardGroup,
+        touchpadGroup, gapsGroup, layoutGroup;
 
     auto &kb = m_config.keyboard;
     auto &bd = m_config.border;
 
+    // lua ---@class mu.opts.border
     borderGroup.fields = {
+        // lua ---@field width integer Border width in pixels. Must be between 0
+        // and 1000.
         intField("width", &bd.width, 0, 1000, MuWM::ChangeLayout),
+
+        // lua ---@field focused mu.Color Border color for the focused window.
         colorField("focused", bd.focused_color, MuWM::ChangeRecolor),
+
+        // lua ---@field unfocused mu.Color Border color for unfocused windows.
         colorField("unfocused", bd.unfocused_color, MuWM::ChangeRecolor),
+
+        // lua ---@field smart boolean Whether to hide borders when only one
+        // window is visible.
+        boolField("smart", &bd.smart, MuWM::ChangeLayout),
+
+        // lua ---@field fullscreen boolean Whether to draw a border around
+        // fullscreen windows.
+        boolField("fullscreen", &bd.fullscreen, MuWM::ChangeLayout),
     };
 
+    // lua ---@class mu.opts.layout
+    layoutGroup.fields = {
+        // lua ---@field master_ratio number The ratio of the master area to the
+        // whole screen. Must be between 0 and 1.
+        floatField("master_ratio", &m_config.layout.master_ratio,
+                   MuWM::ChangeLayout),
+
+    };
+
+    // lua ---@class mu.opts.keyboard
     keyboardGroup.fields = {
+        // lua ---@field rules string XKB rules file name.
         stringField("rules", &kb.rules, MuWM::ChangeKeyboard),
+
+        // lua ---@field model string XKB model name.
         stringField("model", &kb.model, MuWM::ChangeKeyboard),
+
+        // lua ---@field layout string XKB layout name.
         stringField("layout", &kb.layout, MuWM::ChangeKeyboard),
+
+        // lua ---@field variant string XKB variant name.
         stringField("variant", &kb.variant, MuWM::ChangeKeyboard),
+
+        // lua ---@field xkb_options string XKB options string, e.g.
+        // "ctrl:nocaps".
         stringField("xkb_options", &kb.xkb_options, MuWM::ChangeKeyboard),
+
+        // lua ---@field repeat_rate integer Keyboard repeat rate in characters
+        // per second.
         intField("repeat_rate", &kb.repeat_rate, INT_MIN, INT_MAX,
                  MuWM::ChangeKeyboard),
+
+        // lua ---@field repeat_delay integer Keyboard repeat delay in
+        // milliseconds.
         intField("repeat_delay", &kb.repeat_delay, INT_MIN, INT_MAX,
                  MuWM::ChangeKeyboard),
     };
 
-    optsGroup.fields = {
-        subField("keyboard", &keyboardGroup),
-        subField("touchpad", &touchpadGroup),
-        intField("gap", &m_config.gap, 0, 1000, MuWM::ChangeLayout),
-        subField("border", &borderGroup),
+    // lua ---@class mu.opts.gaps
+    gapsGroup.fields = {
+        // lua ---@field value integer Window gap in pixels.
+        intField("value", &m_config.gaps.value, 0, 1000, MuWM::ChangeLayout),
+
+        // lua ---@field smart boolean Whether to hide gaps when only one window
+        // is visible.
+        boolField("smart", &m_config.gaps.smart, MuWM::ChangeLayout),
     };
 
+    // lua ---@class mu.opts
+    optsGroup.fields = {
+        // lua ---@field keyboard mu.opts.keyboard Keyboard layout options.
+        subField("keyboard", &keyboardGroup),
+
+        // lua ---@field touchpad mu.opts.touchpad Touchpad options.
+        subField("touchpad", &touchpadGroup),
+
+        // lua ---@field gaps mu.opts.gaps Window gap options.
+        subField("gaps", &gapsGroup),
+
+        // lua ---@field border mu.opts.border Window border options.
+        subField("border", &borderGroup),
+
+        // lua ---@field layout mu.opts.layout Layout options.
+        subField("layout", &layoutGroup),
+    };
+
+    // lua ---@class mu.opts.touchpad
     touchpadGroup.fields = {
+        // lua ---@field natural_scroll boolean Whether to enable natural
+        // scrolling on the touchpad.
         boolField("natural_scroll", &m_config.touchpad.natural_scroll,
                   MuWM::ChangePointer),
+
+        // lua ---@field tap_to_click boolean Whether to enable tap-to-click on
+        // the touchpad.
         boolField("tap_to_click", &m_config.touchpad.tap_to_click,
                   MuWM::ChangePointer),
     };
 
+    // lua ---@class mu
     rootGroup.fields = {
 
-        // muwm subtables
+        // lua ---@field opts mu.opts User-configurable options.
         subField("opts", &optsGroup),
 
-        // MuWM methods
+        // lua ---@field toggle_fullscreen fun() Toggle fullscreen for the
+        // focused window.
+        funcField("toggle_fullscreen", luaCall<&MuWM::toggleFullscreen>),
+
+        // lua ---@field focus_next fun() Focus the next window.
         funcField("focus_next", luaCall<&MuWM::focusNext>),
+
+        // lua ---@field focus_prev fun() Focus the previous window.
         funcField("focus_prev", luaCall<&MuWM::focusPrev>),
+
+        // lua ---@field swap_next fun() Swap the focused window with the next
+        // window.
         funcField("swap_next", luaCall<&MuWM::swapNext>),
+
+        // lua ---@field swap_prev fun() Swap the focused window with the
+        // previous window.
         funcField("swap_prev", luaCall<&MuWM::swapPrev>),
+
+        // lua ---@field swap_master fun() Swap the focused window with the
+        // master window.
         funcField("swap_master", luaCall<&MuWM::swapMaster>),
+
+        // lua ---@field workspace_next fun() Switch to the next workspace.
         funcField("workspace_next", luaCall<&MuWM::workspaceNext>),
+
+        // lua ---@field workspace_prev fun() Switch to the previous workspace.
         funcField("workspace_prev", luaCall<&MuWM::workspacePrev>),
+
+        // lua ---@field close fun() Close the focused window.
+        funcField("close", luaCall<&MuWM::close>),
+
+        // lua ---@field quit fun() Quit the window manager.
+        funcField("quit", luaCall<&MuWM::quit>),
+
+        // lua ---@field reload fun() Reload the config file.
+        funcField("reload", luaCall<&MuWM::loadConfig>),
+
+        funcField("set_master_ratio", luaSetMasterRatio),
         funcField("focus_workspace", luaFocusWorkspace),
         funcField("window_to_workspace", luaWindowToWorkspace),
-
-        funcField("close", luaCall<&MuWM::close>),
-        funcField("quit", luaCall<&MuWM::quit>),
-        funcField("reload", luaCall<&MuWM::loadConfig>),
         funcField("spawn", luaSpawn),
         funcField("keybind", &keyBind),
-
-        // Event handlers
         funcField("on", luaOn<false>),
         funcField("once", luaOn<true>),
         funcField("off", luaOff),

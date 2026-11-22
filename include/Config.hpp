@@ -6,13 +6,19 @@
 
 struct Config
 {
-    int gap = 10;
+    struct Gaps
+    {
+        int value  = 10;
+        bool smart = true;
+    } gaps;
 
     struct Border
     {
         int width                = 2;
         float focused_color[4]   = {0.0f, 0.5f, 1.0f, 1.0f};
         float unfocused_color[4] = {0.5f, 0.5f, 0.5f, 1.0f};
+        bool smart               = true;
+        bool fullscreen          = false;
     } border;
 
     struct KeyboardConfig
@@ -25,6 +31,11 @@ struct Config
     struct TouchpadConfig
     {
         bool natural_scroll = true;
-        bool tap_to_click    = true;
+        bool tap_to_click   = true;
     } touchpad;
+
+    struct Layout
+    {
+        float master_ratio = 0.55f;
+    } layout;
 };

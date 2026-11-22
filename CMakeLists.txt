@@ -88,3 +88,27 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
 target_compile_options(${PROJECT_NAME} PRIVATE
     -Wall -Wextra
 )
+
+# --- Lua stubs -----------------------------------------------------------------
+# lua/mu.lua (LuaLS stubs for editors) is generated from the doc comments in
+# src/Lua.cpp. `cmake --build build --target lua-stubs` regenerates it; the
+# `lua-stubs` test checks the comments against the code and that the committed
+# file is current.
+
+find_package(Python3 COMPONENTS Interpreter)
+if(Python3_FOUND)
+    set(LUA_STUBS_SCRIPT ${CMAKE_CURRENT_SOURCE_DIR}/scripts/generate_lua_stub.py)
+
+    add_custom_target(lua-stubs
+        COMMAND ${Python3_EXECUTABLE} ${LUA_STUBS_SCRIPT}
+        COMMENT "Generating lua/mu.lua"
+        VERBATIM
+    )
+
+    enable_testing()
+    add_test(NAME lua-stubs
+        COMMAND ${Python3_EXECUTABLE} ${LUA_STUBS_SCRIPT} --check
+    )
+else()
+    message(STATUS "Python3 not found: lua-stubs target and test disabled")
+endif()

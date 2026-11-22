@@ -16,15 +16,19 @@ struct Toplevel
     Listener<Toplevel> unmap;
     Listener<Toplevel> commit;
     Listener<Toplevel> destroy;
+    Listener<Toplevel> requestFullscreen;
     Workspace *workspace = nullptr;
-
-    uint64_t id = 0;
+    uint64_t id          = 0;
+    bool fullscreen      = false;
+    bool floating        = false;
 
     void onMap(void *data);
     void onUnmap(void *data);
     void onCommit(void *data);
     void onDestroy(void *data);
+    void onRequestFullscreen(void *data);
 
     void setFocused(bool focused);
     void resizeBorders(int w, int h);
+    void setBordersVisible(bool visible);
 };

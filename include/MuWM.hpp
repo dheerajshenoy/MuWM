@@ -58,6 +58,9 @@ public:
     void close();
     void focusWorkspace(int index);
     void windowToWorkspace(int index);
+    void toggleFullscreen();
+    void setFullscreen(Toplevel *, bool fullscreen);
+    void setMasterRatio(float ratio);
 
     enum Change
     {
@@ -133,6 +136,7 @@ private:
     void cycleWorkspace(int delta);
     void switchWorkspace(Output *, Workspace *);
     void toplevelToWorkspace(Toplevel *, Workspace *);
+    void updateFullscreenLayers(Output *);
 
 private:
     bool m_ok = false;

@@ -14,7 +14,21 @@ void
 Toplevel::onCommit(void *)
 {
     if (xdg->base->initial_commit)
+    {
         wlr_xdg_toplevel_set_size(xdg, 0, 0); // 0,0 = "client picks its size"
+        // A client can ask for fullscreen before its first commit.
+        wm->setFullscreen(this, xdg->requested.fullscreen);
+    }
+}
+
+void
+Toplevel::onRequestFullscreen(void *)
+{
+    wm->setFullscreen(this, xdg->requested.fullscreen);
+    // The client waits for a configure answering its request, even if we
+    // changed nothing.
+    if (xdg->base->initialized)
+        wlr_xdg_surface_schedule_configure(xdg->base);
 }
 
 void
@@ -31,6 +45,7 @@ Toplevel::onDestroy(void *)
     unmap.unbind();
     commit.unbind();
     destroy.unbind();
+    requestFullscreen.unbind();
     delete this;
 }
 
@@ -46,6 +61,13 @@ Toplevel::resizeBorders(int w, int h)
     wlr_scene_node_set_position(&border[2]->node, -b, 0);
     wlr_scene_rect_set_size(border[3], b, h);
     wlr_scene_node_set_position(&border[3]->node, w, 0);
+}
+
+void
+Toplevel::setBordersVisible(bool visible)
+{
+    for (auto *r : border)
+        wlr_scene_node_set_enabled(&r->node, visible);
 }
 
 void

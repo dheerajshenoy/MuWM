@@ -313,6 +313,8 @@ MuWM::handleNewToplevel(wlr_xdg_toplevel *xdg)
     t->destroy.bind<&Toplevel::onDestroy>(&xdg->events.destroy, t);
     t->tree->node.data = t;
     t->unmap.bind<&Toplevel::onUnmap>(&xdg->base->surface->events.unmap, t);
+    t->requestFullscreen.bind<&Toplevel::onRequestFullscreen>(
+        &xdg->events.request_fullscreen, t);
 }
 
 void
@@ -549,6 +551,11 @@ MuWM::focusToplevel(Toplevel *t)
         m_focusedOutput = ws->output;
     ws->focusedToplevel = t;
 
+    // Focusing another window would hide it behind the fullscreen one.
+    for (Toplevel *other : std::vector<Toplevel *>(ws->toplevels))
+        if (other != t && other->fullscreen)
+            setFullscreen(other, false);
+
     wlr_scene_node_raise_to_top(&t->tree->node);
     if (m_focusedLayer)
         return; // the window is focused again when the layer surface lets go
@@ -595,6 +602,11 @@ MuWM::addToplevel(Toplevel *t)
     if (std::find(toplevels.begin(), toplevels.end(), t) == toplevels.end())
         toplevels.push_back(t);
 
+    // A new window leaves any fullscreen window behind it, so lay out first.
+    for (Toplevel *other : std::vector<Toplevel *>(toplevels))
+        if (other != t && other->fullscreen)
+            setFullscreen(other, false);
+
     arrange(t->workspace);
     focusToplevel(t);
 
@@ -640,34 +652,66 @@ MuWM::arrange()
 void
 MuWM::arrange(Workspace *ws)
 {
+    if (ws->output)
+        updateFullscreenLayers(ws->output);
+
     wlr_box area    = ws->output ? ws->output->usableArea : wlr_box{};
     auto &toplevels = ws->toplevels;
     if (area.width <= 0 || toplevels.empty())
         return;
 
-    int gap = m_config.gap;
-    area.x += gap;
-    area.y += gap;
-    area.width -= 2 * gap;
-    area.height -= 2 * gap;
-
-    auto place = [](Toplevel *t, int x, int y, int w, int h)
+    auto place = [](Toplevel *t, int x, int y, int w, int h, bool borders)
     {
         wlr_scene_node_set_position(&t->tree->node, x, y);
         wlr_xdg_toplevel_set_size(t->xdg, w, h);
-        t->resizeBorders(w, h);
+        t->setBordersVisible(borders);
+        if (borders)
+            t->resizeBorders(w, h);
     };
 
-    const int n = static_cast<int>(toplevels.size());
-    if (n == 1)
+    // A fullscreen window gets the whole output (bars included) and nothing
+    // else is laid out; the other windows stay hidden behind it.
+    for (Toplevel *t : toplevels)
     {
-        place(toplevels[0], area.x, area.y, area.width, area.height);
+        if (!t->fullscreen)
+            continue;
+
+        wlr_box full;
+        wlr_output_layout_get_box(m_layout, ws->output->output, &full);
+        const int bw = m_config.border.fullscreen ? m_config.border.width : 0;
+        place(t, full.x + bw, full.y + bw, full.width - 2 * bw,
+              full.height - 2 * bw, bw > 0);
+        wlr_scene_node_raise_to_top(&t->tree->node);
         return;
     }
 
-    const int masterW = (area.width - gap) * 55 / 100;
+    int gap;
+
+    const int n = static_cast<int>(toplevels.size());
+
+    if (m_config.gaps.smart && n == 1)
+        gap = 0;
+    else
+    {
+        gap = m_config.gaps.value;
+        area.x += gap;
+        area.y += gap;
+        area.width -= 2 * gap;
+        area.height -= 2 * gap;
+    }
+
+    // Smart borders: a lone window needs no border to be told apart.
+    const bool borders = !(m_config.border.smart && n == 1);
+
+    if (n == 1)
+    {
+        place(toplevels[0], area.x, area.y, area.width, area.height, borders);
+        return;
+    }
+
+    const int masterW = (area.width - gap) * m_config.layout.master_ratio;
     const int stackW  = area.width - gap - masterW;
-    place(toplevels[0], area.x, area.y, masterW, area.height);
+    place(toplevels[0], area.x, area.y, masterW, area.height, borders);
 
     // Integer division would leave the remainder as empty space under the
     // stack, so hand one extra pixel to each of the first `rem` windows.
@@ -679,7 +723,7 @@ MuWM::arrange(Workspace *ws)
     for (int i = 1; i < n; i++)
     {
         const int hi = h + (i - 1 < rem ? 1 : 0);
-        place(toplevels[i], area.x + masterW + gap, y, stackW, hi);
+        place(toplevels[i], area.x + masterW + gap, y, stackW, hi, borders);
         y += hi + gap;
     }
 }
@@ -931,6 +975,24 @@ MuWM::arrangeLayers(wlr_output *wlrOutput)
             }
 
     output->usableArea = usable;
+    updateFullscreenLayers(output); // new surfaces must respect fullscreen
+}
+
+// While an output shows a fullscreen window, its top-layer surfaces (bars)
+// are hidden. Derived from the current state each time, so every path that
+// changes it (close, workspace switch, ...) only has to call arrange().
+void
+MuWM::updateFullscreenLayers(Output *output)
+{
+    bool fullscreen = false;
+    if (output->workspace)
+        for (const Toplevel *t : output->workspace->toplevels)
+            fullscreen = fullscreen || t->fullscreen;
+
+    for (LayerShellSurface *s : m_layerSurfaces)
+        if (s->layerSurface->output == output->output
+            && s->layerSurface->current.layer == ZWLR_LAYER_SHELL_V1_LAYER_TOP)
+            wlr_scene_node_set_enabled(&s->scene->tree->node, !fullscreen);
 }
 
 void
@@ -1226,4 +1288,43 @@ MuWM::toplevelToWorkspace(Toplevel *toplevel, Workspace *ws_target)
     arrange(ws_target);
 
     focusToplevel(toplevel);
+}
+
+void
+MuWM::toggleFullscreen()
+{
+    if (Toplevel *t = focusedToplevel())
+        setFullscreen(t, !t->fullscreen);
+}
+
+void
+MuWM::setFullscreen(Toplevel *toplevel, bool fullscreen)
+{
+    if (!toplevel || toplevel->fullscreen == fullscreen)
+        return;
+
+    toplevel->fullscreen = fullscreen;
+    // Before the first commit the state is sent with the initial configure.
+    if (toplevel->xdg->base->initialized)
+        wlr_xdg_toplevel_set_fullscreen(toplevel->xdg, fullscreen);
+
+    Workspace *ws = toplevel->workspace;
+    if (!ws)
+        return; // not mapped yet; addToplevel lays it out
+
+    // One fullscreen window per workspace.
+    if (fullscreen)
+        for (Toplevel *other : std::vector<Toplevel *>(ws->toplevels))
+            if (other != toplevel && other->fullscreen)
+                setFullscreen(other, false);
+
+    arrange(ws);
+}
+
+void
+MuWM::setMasterRatio(float ratio)
+{
+    if (ratio < 0.0f || ratio > 1.0f)
+        return;
+    scheduleApply(ChangeLayout);
 }
