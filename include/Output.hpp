@@ -1,7 +1,7 @@
 #pragma once
 
-#include "wlroots.hpp"
 #include "Listener.hpp"
+#include "wlroots.hpp"
 
 class MuWM;
 
@@ -12,8 +12,9 @@ struct Output
     wlr_scene_output *sceneOutput = nullptr;
     Listener<Output> frame;
     Listener<Output> destroy;
+    Listener<Output> requestState;
 
     void onFrame(void *data);
     void onDestroy(void *data);
+    void onRequestState(void *data);
 };
-

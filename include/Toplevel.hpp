@@ -11,10 +11,12 @@ struct Toplevel
     wlr_xdg_toplevel *xdg = nullptr;
     wlr_scene_tree *tree  = nullptr;
     Listener<Toplevel> map;
+    Listener<Toplevel> unmap;
     Listener<Toplevel> commit;
     Listener<Toplevel> destroy;
 
     void onMap(void *data);
+    void onUnmap(void *data);
     void onCommit(void *data);
     void onDestroy(void *data);
 };

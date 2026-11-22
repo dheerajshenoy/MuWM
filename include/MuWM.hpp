@@ -1,9 +1,12 @@
 #pragma once
 
+#include "Config.hpp"
 #include "Listener.hpp"
 #include "Toplevel.hpp"
 #include "argparse.hpp"
 #include "wlroots.hpp"
+
+#include <vector>
 
 class MuWM;
 
@@ -28,7 +31,9 @@ public:
     void handleNewToplevel(wlr_xdg_toplevel *xdg);
     void handleNewInput(wlr_input_device *device);
     void focusToplevel(Toplevel *t);
-    void forgetToplevel(Toplevel *t);
+    void addToplevel(Toplevel *t);
+    void removeToplevel(Toplevel *t);
+    void arrange();
     bool handleKeybinding(xkb_keysym_t sym);
     wlr_seat *seat() const
     {
@@ -50,6 +55,7 @@ private:
     void onCursorButton(void *data);
     void onCursorAxis(void *data);
     void onCursorFrame(void *data);
+    void onLayoutChange(void *data);
 
 private:
     bool m_ok = false;
@@ -66,6 +72,9 @@ private:
     wlr_xdg_shell *m_xdgShell              = nullptr;
     wlr_cursor *m_cursor                   = nullptr;
     wlr_xcursor_manager *m_xcursor         = nullptr;
+    Toplevel *m_focused                    = nullptr;
+
+    OutputListener m_outputListener;
 
     Listener<MuWM> m_cursorMotion;
     Listener<MuWM> m_cursorMotionAbs;
@@ -73,7 +82,9 @@ private:
     Listener<MuWM> m_cursorAxis;
     Listener<MuWM> m_cursorFrame;
     Listener<MuWM> m_newInput;
-    Toplevel *m_focused = nullptr;
-    OutputListener m_outputListener;
     Listener<MuWM> m_newToplevel;
+    Listener<MuWM> m_layoutChange;
+
+    Config m_config;
+    std::vector<Toplevel *> m_toplevels;
 };

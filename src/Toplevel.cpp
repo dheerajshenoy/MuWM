@@ -7,7 +7,7 @@ Toplevel::onMap(void *)
 {
     wlr_log(WLR_INFO, "Window mapped: %s",
             xdg->title ? xdg->title : "(untitled)");
-    wm->focusToplevel(this);
+    wm->addToplevel(this);
 }
 
 void
@@ -18,9 +18,15 @@ Toplevel::onCommit(void *)
 }
 
 void
+Toplevel::onUnmap(void *)
+{
+    wm->removeToplevel(nullptr);
+}
+
+void
 Toplevel::onDestroy(void *)
 {
-    wm->forgetToplevel(this);
+    wm->removeToplevel(this);
     wl_list_remove(&map.listener.link);
     wl_list_remove(&commit.listener.link);
     wl_list_remove(&destroy.listener.link);

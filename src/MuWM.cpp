@@ -99,6 +99,8 @@ MuWM::init()
         return false;
     }
 
+    m_layoutChange.bind<&MuWM::onLayoutChange>(&m_layout->events.change, this);
+
     m_scene = wlr_scene_create();
     if (!m_scene)
     {
@@ -164,6 +166,8 @@ MuWM::handleNewOutput(wlr_output *output)
                                        o->sceneOutput);
     o->frame.bind<&Output::onFrame>(&output->events.frame, o);
     o->destroy.bind<&Output::onDestroy>(&output->events.destroy, o);
+    o->requestState.bind<&Output::onRequestState>(&output->events.request_state,
+                                                  o);
 
     wlr_log(WLR_INFO, "New output: %s", output->name);
 }
@@ -204,6 +208,7 @@ MuWM::handleNewToplevel(wlr_xdg_toplevel *xdg)
     t->commit.bind<&Toplevel::onCommit>(&xdg->base->surface->events.commit, t);
     t->destroy.bind<&Toplevel::onDestroy>(&xdg->events.destroy, t);
     t->tree->node.data = t; // new line, after tree is created
+    t->unmap.bind<&Toplevel::onUnmap>(&xdg->base->surface->events.unmap, t);
 }
 
 void
@@ -282,10 +287,65 @@ MuWM::focusToplevel(Toplevel *t)
 }
 
 void
-MuWM::forgetToplevel(Toplevel *t)
+MuWM::addToplevel(Toplevel *t)
 {
+    if (std::find(m_toplevels.begin(), m_toplevels.end(), t)
+        == m_toplevels.end())
+        m_toplevels.push_back(t);
+    arrange();
+    focusToplevel(t);
+}
+
+void
+MuWM::removeToplevel(Toplevel *t)
+{
+    std::erase(m_toplevels, t); // no-op if already removed (unmap then destroy)
     if (m_focused == t)
         m_focused = nullptr;
+    arrange();
+    if (!m_focused && !m_toplevels.empty())
+        focusToplevel(m_toplevels.back());
+}
+
+void
+MuWM::arrange()
+{
+    wlr_box area;
+    wlr_output_layout_get_box(m_layout, nullptr,
+                              &area); // nullptr = bounding box of all outputs
+    if (area.width <= 0 || m_toplevels.empty())
+        return;
+
+    int gap = m_config.gap;
+    area.x += gap;
+    area.y += gap;
+    area.width -= 2 * gap;
+    area.height -= 2 * gap;
+
+    auto place = [](Toplevel *t, int x, int y, int w, int h)
+    {
+        wlr_scene_node_set_position(&t->tree->node, x,
+                                    y); // where it is: our decision
+        wlr_xdg_toplevel_set_size(t->xdg, w,
+                                  h); // how big: a request to the client
+    };
+
+    const int n = static_cast<int>(m_toplevels.size());
+    if (n == 1)
+    {
+        place(m_toplevels[0], area.x, area.y, area.width, area.height);
+        return;
+    }
+
+    const int masterW = (area.width - gap) * 55 / 100;
+    const int stackW  = area.width - gap - masterW;
+    place(m_toplevels[0], area.x, area.y, masterW, area.height);
+
+    const int stackN = n - 1;
+    const int h      = (area.height - gap * (stackN - 1)) / stackN;
+    for (int i = 1; i < n; i++)
+        place(m_toplevels[i], area.x + masterW + gap,
+              area.y + (i - 1) * (h + gap), stackW, h);
 }
 
 Toplevel *
@@ -385,4 +445,10 @@ MuWM::spawn(const std::string &cmd)
         execl("/bin/sh", "sh", "-c", cmd.c_str(), nullptr);
         _exit(1); // only reached if exec failed
     }
+}
+
+void
+MuWM::onLayoutChange(void *)
+{
+    arrange(); // output geometry changed: re-tile
 }
