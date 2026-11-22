@@ -413,11 +413,19 @@ MuWM::arrange()
     const int stackW  = area.width - gap - masterW;
     place(m_toplevels[0], area.x, area.y, masterW, area.height);
 
+    // Integer division would leave the remainder as empty space under the
+    // stack, so hand one extra pixel to each of the first `rem` windows.
     const int stackN = n - 1;
-    const int h      = (area.height - gap * (stackN - 1)) / stackN;
+    const int avail  = area.height - gap * (stackN - 1);
+    const int h      = avail / stackN;
+    const int rem    = avail % stackN;
+    int y            = area.y;
     for (int i = 1; i < n; i++)
-        place(m_toplevels[i], area.x + masterW + gap,
-              area.y + (i - 1) * (h + gap), stackW, h);
+    {
+        const int hi = h + (i - 1 < rem ? 1 : 0);
+        place(m_toplevels[i], area.x + masterW + gap, y, stackW, hi);
+        y += hi + gap;
+    }
 }
 
 Toplevel *
