@@ -7,6 +7,7 @@
 #include <climits>
 #include <cmath>
 #include <cstring>
+#include <expected>
 #include <filesystem>
 
 namespace
@@ -382,6 +383,105 @@ luaCall(lua_State *L)
     return 0;
 }
 
+// Releases a Lua registry ref when the last copy of its handler is destroyed.
+struct LuaRef
+{
+    lua_State *L;
+    int ref;
+
+    LuaRef(lua_State *L, int ref) : L(L), ref(ref) {}
+    LuaRef(const LuaRef &) = delete;
+    ~LuaRef()
+    {
+        luaL_unref(L, LUA_REGISTRYINDEX, ref);
+    }
+};
+
+struct EventName
+{
+    const char *name;
+    EventType type;
+};
+
+constexpr EventName kEventNames[] = {
+    {"startup", EventType::Startup},
+};
+
+std::expected<EventType, const char *>
+checkEventType(lua_State *L, int arg)
+{
+    const char *name = luaL_checkstring(L, arg);
+    for (const EventName &e : kEventNames)
+        if (std::strcmp(name, e.name) == 0)
+            return e.type;
+    luaL_error(L, "unknown event '%s'", name);
+
+    return std::unexpected("unreachable");
+}
+
+int
+traceback(lua_State *L)
+{
+    luaL_traceback(L, L, lua_tostring(L, 1), 1);
+    return 1;
+}
+
+// Handlers always run on the main thread, even if registered from a coroutine.
+lua_State *
+mainThread(lua_State *L)
+{
+    lua_rawgeti(L, LUA_REGISTRYINDEX, LUA_RIDX_MAINTHREAD);
+    lua_State *main = lua_tothread(L, -1);
+    lua_pop(L, 1);
+    return main;
+}
+
+void
+callRef(lua_State *L, int ref)
+{
+    lua_pushcfunction(L, traceback);
+    const int msgh = lua_gettop(L);
+    lua_rawgeti(L, LUA_REGISTRYINDEX, ref);
+    if (lua_pcall(L, 0, 0, msgh) != LUA_OK)
+    {
+        wlr_log(WLR_ERROR, "event handler: %s", lua_tostring(L, -1));
+        lua_pop(L, 1);
+    }
+    lua_pop(L, 1); // the traceback function
+}
+
+// mu.on(event, fn) / mu.once(event, fn): returns an id for mu.off().
+template <bool Once>
+int
+luaOn(lua_State *L)
+{
+    auto eventValue = checkEventType(L, 1);
+    if (!eventValue)
+        return luaL_error(L, "%s", eventValue.error());
+
+    const EventType type = *eventValue;
+
+    luaL_checktype(L, 2, LUA_TFUNCTION);
+
+    lua_pushvalue(L, 2);
+    auto ref = std::make_shared<LuaRef>(mainThread(L),
+                                        luaL_ref(L, LUA_REGISTRYINDEX));
+
+    const int id = wmFrom(L)->eventBus().add(type, [ref](void *)
+    { callRef(ref->L, ref->ref); }, Once);
+    lua_pushinteger(L, id);
+    return 1;
+}
+
+// mu.off(id): returns whether a handler was removed.
+int
+luaOff(lua_State *L)
+{
+    const int id = static_cast<int>(luaL_checkinteger(L, 1));
+    lua_pushboolean(L, wmFrom(L)->eventBus().remove(id));
+    return 1;
+}
+
 } // namespace
 
 void
@@ -422,6 +522,7 @@ MuWM::loadConfig()
 
     // On reload, bindings the new config no longer sets must go away.
     clearBindings();
+    m_eventBus.clear();
 
     if (lua_pcall(m_lua, 0, 0, 0) != LUA_OK)
     {
@@ -478,6 +579,9 @@ MuWM::initLuaBindings()
         funcField("quit", luaCall<&MuWM::quit>),
         funcField("reload", luaCall<&MuWM::loadConfig>),
         funcField("spawn", luaSpawn),
+        funcField("on", luaOn<false>),
+        funcField("once", luaOn<true>),
+        funcField("off", luaOff),
     };
 
     lua_pushlightuserdata(m_lua, this);

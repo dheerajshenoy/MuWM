@@ -2,6 +2,7 @@
 
 #include "Binding.hpp"
 #include "Config.hpp"
+#include "EventBus.hpp"
 #include "Listener.hpp"
 #include "Toplevel.hpp"
 #include "argparse.hpp"
@@ -63,9 +64,13 @@ public:
                          double *sy);
     void processMotion(uint32_t timeMsec);
     void spawn(const std::string &cmd);
-
     void addBinding(Binding b);
     void clearBindings();
+
+    EventBus &eventBus()
+    {
+        return m_eventBus;
+    }
 
     const Config &config() const
     {
@@ -129,4 +134,5 @@ private:
     wl_event_source *m_applyIdle = nullptr;
 
     std::vector<Binding> m_keybindings;
+    EventBus m_eventBus;
 };

@@ -65,6 +65,9 @@ MuWM::~MuWM()
         wl_display_destroy(m_display);
     }
 
+    // Handlers hold Lua registry refs, so they must go before the state does.
+    m_eventBus.clear();
+
     if (m_lua)
     {
         lua_close(m_lua);
@@ -222,6 +225,8 @@ MuWM::run(const std::string &startupCmd)
 
     if (!startupCmd.empty())
         spawn(startupCmd);
+
+    m_eventBus.emit(EventType::Startup);
 
     wl_display_run(m_display);
     return true;
