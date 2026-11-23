@@ -68,6 +68,7 @@ add_executable(${PROJECT_NAME}
     src/EventBus.cpp
     src/Logging.cpp
     src/Popup.cpp
+    src/LockSurface.cpp
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE

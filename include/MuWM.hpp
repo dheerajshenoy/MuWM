@@ -14,6 +14,7 @@
 
 class MuWM;
 struct LayerShellSurface;
+struct LockSurface;
 struct Keyboard;
 struct Pointer;
 
@@ -99,6 +100,12 @@ public:
     void releaseLayerFocus(LayerShellSurface *s);
     void removeLayerShellSurface(LayerShellSurface *s);
     void closeLayerSurfacesOn(wlr_output *output);
+    bool locked() const
+    {
+        return m_locked;
+    }
+    void lockSurfaceMapped(LockSurface *s);
+    void lockSurfaceDestroyed(LockSurface *s);
     bool handleKeybinding(uint32_t mods, xkb_keysym_t sym);
     wlr_seat *seat() const
     {
@@ -151,6 +158,16 @@ private:
     bool applyOutputConfig(wlr_output_configuration_v1 *config, bool test);
     void onRequestSetSelection(void *data);
     void onRequestSetPrimarySelection(void *data);
+    void onNewLock(void *data);
+    void onLockNewSurface(void *data);
+    void onLockUnlock(void *data);
+    void onLockDestroy(void *data);
+    void startLock();
+    void createLockCover(Output *);
+    void layoutLock();
+    void focusLockSurface();
+    void checkLockReady();
+    void restoreKeyboardFocus();
 
     void initLua();
     void initLuaBindings();
@@ -187,6 +204,8 @@ private:
     wlr_output_manager_v1 *m_outputManager            = nullptr;
     wlr_cursor_shape_manager_v1 *m_cursorShapeManager = nullptr;
     wlr_ext_foreign_toplevel_list_v1 *m_foreignList   = nullptr;
+    wlr_session_lock_manager_v1 *m_lockManager        = nullptr;
+    wlr_session_lock_v1 *m_lock = nullptr; // the live locker, if any
     wlr_ext_foreign_toplevel_image_capture_source_manager_v1
         *m_toplevelCaptureManager = nullptr;
     Output *m_focusedOutput       = nullptr;
@@ -216,6 +235,10 @@ private:
     Listener<MuWM> m_requestSetSelection;
     Listener<MuWM> m_requestSetPrimary;
     Listener<MuWM> m_newPopup;
+    Listener<MuWM> m_newLock;
+    Listener<MuWM> m_lockNewSurface;
+    Listener<MuWM> m_lockUnlock;
+    Listener<MuWM> m_lockDestroy;
 
     // Super+drag: left button moves a window, right button resizes it.
     enum class Grab
@@ -238,6 +261,13 @@ private:
     // The four layer trees are indexed by zwlr_layer_shell_v1_layer.
     wlr_scene_tree *m_layerTrees[4] = {};
     wlr_scene_tree *m_windowTree    = nullptr;
+    wlr_scene_tree *m_lockTree = nullptr; // covers and lock surfaces, on top
+
+    // m_locked stays true until the locker really unlocks, even if the locker
+    // process dies: then m_lock is null but the screen stays covered.
+    bool m_locked   = false;
+    bool m_lockSent = false; // `locked` has been sent to the current locker
+    std::vector<LockSurface *> m_lockSurfaces;
 
     lua_State *m_lua = nullptr;
 

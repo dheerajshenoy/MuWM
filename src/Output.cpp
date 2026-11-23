@@ -15,6 +15,11 @@ void
 Output::onDestroy(void *)
 {
     wm->closeLayerSurfacesOn(output);
+    if (lockCover) // its parent is the lock tree, not this output
+    {
+        wlr_scene_node_destroy(&lockCover->node);
+        lockCover = nullptr;
+    }
     wm->removeOutput(this);
     wm->publishOutputConfig(); // this output is no longer in m_outputs
     for (Workspace *ws : workspaces)

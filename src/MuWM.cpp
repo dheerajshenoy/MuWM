@@ -5,6 +5,7 @@
 #include "LayerShellSurface.hpp"
 #include "Output.hpp"
 #include "Pointer.hpp"
+#include "LockSurface.hpp"
 #include "Popup.hpp"
 #include "Toplevel.hpp"
 
@@ -34,6 +35,10 @@ MuWM::~MuWM()
     m_newDecoration.unbind();
     m_layoutChange.unbind();
     m_captureRequest.unbind();
+    m_newLock.unbind();
+    m_lockNewSurface.unbind();
+    m_lockUnlock.unbind();
+    m_lockDestroy.unbind();
     m_outputApply.unbind();
     m_outputTest.unbind();
     // wlroots asserts that a cursor has no listeners left when destroyed
@@ -169,6 +174,8 @@ MuWM::init()
     m_layerTrees[ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY]
         = wlr_scene_tree_create(&m_scene->tree);
 
+    m_lockTree = wlr_scene_tree_create(&m_scene->tree);
+
     // protocols creations
     wlr_compositor_create(m_display, 5, m_renderer);
     wlr_subcompositor_create(m_display);
@@ -180,6 +187,8 @@ MuWM::init()
     wlr_primary_selection_v1_device_manager_create(m_display);
     wlr_ext_data_control_manager_v1_create(m_display, 1);
     wlr_data_control_manager_v1_create(m_display);
+    m_lockManager = wlr_session_lock_manager_v1_create(m_display);
+    m_newLock.bind<&MuWM::onNewLock>(&m_lockManager->events.new_lock, this);
 
     m_cursorShapeManager = wlr_cursor_shape_manager_v1_create(m_display, 1);
     m_cursorShape.bind<&MuWM::onCursorShape>(
@@ -306,6 +315,11 @@ MuWM::handleNewOutput(wlr_output *output)
 
     arrangeLayers(output);
     arrange(o->workspace);
+    if (m_locked)
+    {
+        createLockCover(o); // a monitor plugged in during the lock
+        layoutLock();
+    }
     publishOutputConfig();
 
     wlr_log(WLR_INFO, "New output: %s", output->name);
@@ -645,6 +659,9 @@ MuWM::failConfig()
 bool
 MuWM::handleKeybinding(uint32_t mods, xkb_keysym_t sym)
 {
+    if (m_locked)
+        return false; // no bindings behind the lock screen
+
     sym = xkb_keysym_to_lower(sym);
 
     for (const Binding &b : m_keybindings)
@@ -713,7 +730,7 @@ MuWM::focusToplevel(Toplevel *t)
     wlr_scene_node_raise_to_top(&t->tree->node);
     if (!t->floating)
         raiseFloaters(ws); // a focused tile must not cover floating windows
-    if (m_focusedLayer)
+    if (m_focusedLayer || m_locked)
         return; // the window is focused again when the layer surface lets go
 
     t->setFocused(true);
@@ -974,6 +991,24 @@ MuWM::toplevelAt(double x, double y, wlr_surface **surface, double *sx,
 void
 MuWM::processMotion(uint32_t timeMsec)
 {
+    if (m_locked)
+    {
+        // Only lock surfaces may see the pointer.
+        double sx = 0, sy = 0;
+        wlr_scene_node *node = wlr_scene_node_at(&m_lockTree->node, m_cursor->x,
+                                                 m_cursor->y, &sx, &sy);
+        if (node && node->type == WLR_SCENE_NODE_BUFFER)
+            if (auto *ss = wlr_scene_surface_try_from_buffer(
+                    wlr_scene_buffer_from_node(node)))
+            {
+                wlr_seat_pointer_notify_enter(m_seat, ss->surface, sx, sy);
+                wlr_seat_pointer_notify_motion(m_seat, timeMsec, sx, sy);
+                return;
+            }
+        wlr_seat_pointer_notify_clear_focus(m_seat);
+        return;
+    }
+
     if (m_grab != Grab::None && m_grabbed)
     {
         wlr_box &b = m_grabbed->floatBox;
@@ -1027,6 +1062,14 @@ void
 MuWM::onCursorButton(void *data)
 {
     auto *ev = static_cast<wlr_pointer_button_event *>(data);
+
+    if (m_locked)
+    {
+        // No window grabs or focus changes: just pass it to the locker.
+        wlr_seat_pointer_notify_button(m_seat, ev->time_msec, ev->button,
+                                       ev->state);
+        return;
+    }
 
     if (ev->state == WL_POINTER_BUTTON_STATE_RELEASED && m_grab != Grab::None)
     {
@@ -1131,6 +1174,8 @@ MuWM::onLayoutChange(void *)
 {
     evacuateInactiveOutputs(); // before arrange(): dead outputs have no area
     arrange();
+    if (m_locked)
+        layoutLock();
     publishOutputConfig();
 }
 
@@ -1183,6 +1228,9 @@ MuWM::onNewLayerShellSurface(void *data)
 void
 MuWM::focusLayerSurface(LayerShellSurface *s)
 {
+    if (m_locked)
+        return; // the keyboard belongs to the locker
+
     if (m_focusedLayer == s)
         return;
 
@@ -1572,7 +1620,7 @@ MuWM::switchWorkspace(Output *out, Workspace *ws_target)
 
     if (next)
         focusToplevel(next);
-    else if (!m_focusedLayer)
+    else if (!m_focusedLayer && !m_locked)
         wlr_seat_keyboard_clear_focus(m_seat);
 }
 
@@ -1863,4 +1911,255 @@ MuWM::onRequestSetCursor(void *data)
 
     // A null surface hides the cursor.
     wlr_cursor_set_surface(m_cursor, ev->surface, ev->hotspot_x, ev->hotspot_y);
+}
+
+// --- Session lock (ext-session-lock-v1) ------------------------------------
+
+void
+MuWM::onNewLock(void *data)
+{
+    auto *lock = static_cast<wlr_session_lock_v1 *>(data);
+
+    // One locker at a time. A new one may take over after the old one died.
+    if (m_lock)
+    {
+        wlr_log(WLR_INFO, "Rejecting lock request: a locker is already active");
+        wlr_session_lock_v1_destroy(lock);
+        return;
+    }
+
+    m_lock     = lock;
+    m_lockSent = false;
+    m_lockNewSurface.bind<&MuWM::onLockNewSurface>(&lock->events.new_surface,
+                                                   this);
+    m_lockUnlock.bind<&MuWM::onLockUnlock>(&lock->events.unlock, this);
+    m_lockDestroy.bind<&MuWM::onLockDestroy>(&lock->events.destroy, this);
+
+    if (!m_locked)
+        startLock();
+    checkLockReady();
+}
+
+// Covers every output at once, so the desktop is hidden before the locker
+// has drawn anything, and takes input away from windows.
+void
+MuWM::startLock()
+{
+    m_locked  = true;
+    m_grab    = Grab::None; // drop any move/resize in progress
+    m_grabbed = nullptr;
+
+    if (Toplevel *t = focusedToplevel())
+    {
+        wlr_xdg_toplevel_set_activated(t->xdg, false);
+        t->setFocused(false);
+    }
+    m_focusedLayer = nullptr; // a launcher must not keep the keyboard
+    wlr_seat_keyboard_notify_clear_focus(m_seat);
+    wlr_seat_pointer_notify_clear_focus(m_seat);
+
+    wlr_scene_node_set_enabled(&m_lockTree->node, true);
+    wlr_scene_node_raise_to_top(&m_lockTree->node);
+    for (Output *o : m_outputs)
+        createLockCover(o);
+}
+
+void
+MuWM::createLockCover(Output *o)
+{
+    // A disabled output is not in the layout and has nothing to cover.
+    if (o->lockCover || !wlr_output_layout_get(m_layout, o->output))
+        return;
+
+    const float black[4] = {0.0f, 0.0f, 0.0f, 1.0f}; // opaque
+    wlr_box box;
+    wlr_output_layout_get_box(m_layout, o->output, &box);
+    o->lockCover = wlr_scene_rect_create(m_lockTree, box.width, box.height,
+                                         black);
+    wlr_scene_node_set_position(&o->lockCover->node, box.x, box.y);
+}
+
+// Keeps covers and lock surfaces matching their output's box.
+void
+MuWM::layoutLock()
+{
+    for (Output *o : m_outputs)
+    {
+        if (!o->lockCover)
+        {
+            createLockCover(o); // an output that came back into the layout
+            continue;
+        }
+        wlr_box box;
+        wlr_output_layout_get_box(m_layout, o->output, &box);
+        wlr_scene_rect_set_size(o->lockCover, box.width, box.height);
+        wlr_scene_node_set_position(&o->lockCover->node, box.x, box.y);
+    }
+
+    for (LockSurface *ls : m_lockSurfaces)
+    {
+        wlr_output *out = ls->surface->output;
+        if (!out)
+            continue;
+        wlr_box box;
+        wlr_output_layout_get_box(m_layout, out, &box);
+        wlr_scene_node_set_position(&ls->tree->node, box.x, box.y);
+        if (box.width > 0 && (box.width != ls->configuredW
+                              || box.height != ls->configuredH))
+        {
+            wlr_session_lock_surface_v1_configure(ls->surface, box.width,
+                                                  box.height);
+            ls->configuredW = box.width;
+            ls->configuredH = box.height;
+        }
+    }
+}
+
+void
+MuWM::onLockNewSurface(void *data)
+{
+    auto *surface = static_cast<wlr_session_lock_surface_v1 *>(data);
+
+    auto *ls = new LockSurface{this, surface};
+    ls->tree = wlr_scene_subsurface_tree_create(m_lockTree, surface->surface);
+    ls->map.bind<&LockSurface::onMap>(&surface->surface->events.map, ls);
+    ls->destroy.bind<&LockSurface::onDestroy>(&surface->events.destroy, ls);
+    m_lockSurfaces.push_back(ls);
+
+    layoutLock(); // positions it and sends the configure
+}
+
+void
+MuWM::lockSurfaceMapped(LockSurface *)
+{
+    focusLockSurface();
+    checkLockReady();
+}
+
+void
+MuWM::lockSurfaceDestroyed(LockSurface *s)
+{
+    std::erase(m_lockSurfaces, s);
+    if (m_locked)
+        focusLockSurface(); // another surface, or nothing
+}
+
+// The keyboard goes to the lock surface on the focused output, else to any.
+void
+MuWM::focusLockSurface()
+{
+    LockSurface *pick = nullptr;
+    for (LockSurface *ls : m_lockSurfaces)
+    {
+        if (!ls->surface->surface->mapped)
+            continue;
+        if (!pick)
+            pick = ls;
+        if (m_focusedOutput && ls->surface->output == m_focusedOutput->output)
+        {
+            pick = ls;
+            break;
+        }
+    }
+
+    if (!pick)
+    {
+        wlr_seat_keyboard_notify_clear_focus(m_seat);
+        return;
+    }
+    if (wlr_keyboard *kb = wlr_seat_get_keyboard(m_seat))
+        wlr_seat_keyboard_notify_enter(m_seat, pick->surface->surface,
+                                       kb->keycodes, kb->num_keycodes,
+                                       &kb->modifiers);
+}
+
+// `locked` tells the client the screen is secure, so send it only once every
+// active output shows a lock surface.
+void
+MuWM::checkLockReady()
+{
+    if (!m_lock || m_lockSent)
+        return;
+
+    for (Output *o : m_outputs)
+    {
+        if (!wlr_output_layout_get(m_layout, o->output))
+            continue; // disabled outputs are not shown to the locker
+        bool covered = false;
+        for (LockSurface *ls : m_lockSurfaces)
+            if (ls->surface->output == o->output && ls->surface->surface->mapped)
+            {
+                covered = true;
+                break;
+            }
+        if (!covered)
+            return;
+    }
+
+    wlr_session_lock_v1_send_locked(m_lock);
+    m_lockSent = true;
+    wlr_log(WLR_INFO, "Session locked");
+}
+
+void
+MuWM::onLockUnlock(void *)
+{
+    wlr_log(WLR_INFO, "Session unlocked");
+    m_locked   = false;
+    m_lockSent = false;
+
+    for (Output *o : m_outputs)
+        if (o->lockCover)
+        {
+            wlr_scene_node_destroy(&o->lockCover->node);
+            o->lockCover = nullptr;
+        }
+    wlr_scene_node_set_enabled(&m_lockTree->node, false);
+
+    wlr_seat_pointer_notify_clear_focus(m_seat); // the next motion re-enters
+    restoreKeyboardFocus();
+}
+
+void
+MuWM::onLockDestroy(void *)
+{
+    m_lockNewSurface.unbind();
+    m_lockUnlock.unbind();
+    m_lockDestroy.unbind();
+    m_lock     = nullptr;
+    m_lockSent = false;
+
+    // The locker went away without unlocking (a crash): stay locked. The covers
+    // stay up and nothing gets input until a new locker takes over.
+    if (m_locked)
+    {
+        wlr_log(WLR_ERROR, "Locker died; the session stays locked");
+        wlr_seat_keyboard_notify_clear_focus(m_seat);
+        wlr_seat_pointer_notify_clear_focus(m_seat);
+    }
+}
+
+// Same decision as when a launcher lets go: layer surface, window, or nothing.
+void
+MuWM::restoreKeyboardFocus()
+{
+    wlr_keyboard *kb = wlr_seat_get_keyboard(m_seat);
+
+    if (m_focusedLayer && kb)
+    {
+        wlr_seat_keyboard_notify_enter(m_seat, m_focusedLayer->layerSurface->surface,
+                                       kb->keycodes, kb->num_keycodes,
+                                       &kb->modifiers);
+        return;
+    }
+    if (Toplevel *t = focusedToplevel(); t && kb)
+    {
+        t->setFocused(true);
+        wlr_xdg_toplevel_set_activated(t->xdg, true);
+        wlr_seat_keyboard_notify_enter(m_seat, t->xdg->base->surface,
+                                       kb->keycodes, kb->num_keycodes,
+                                       &kb->modifiers);
+        return;
+    }
+    wlr_seat_keyboard_notify_clear_focus(m_seat);
 }
