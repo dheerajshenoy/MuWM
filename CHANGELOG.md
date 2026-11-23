@@ -3,51 +3,70 @@
 ## 0.1.0
 
 ### Compositor
-- wlroots-based tiling Wayland compositor with a master/stack layout
-  (master 55%, stack shares the remainder evenly, no leftover gap).
-- Focus, swap and close window actions; focus borders with active/inactive colors.
-- Server-side decorations via xdg-decoration (client-side decorations removed).
-- Spawning programs from keybindings and at startup.
-- Quit with `Super+Shift+C`, and `Super+Shift+Return` to launch `$TERMINAL`
-  (falling back to foot, kitty, alacritty or xterm). Both are installed by
-  default, even without a config or when the config fails to load.
+- wlroots-based tiling Wayland compositor with a master/stack layout.
+  Master gets 55%. The stack shares the rest evenly.
+- Focus, swap and close window actions.
+- Focus borders with active and inactive colors.
+- Smart gaps and smart borders for a single window.
+- Server-side decorations via xdg-decoration.
+- Spawn programs from keybindings and at startup.
+- Quit with `Super+Shift+C`. Launch `$TERMINAL` with `Super+Shift+Return`.
+  It falls back to foot, kitty, alacritty or xterm.
+- Default bindings are installed even without a config or when the config fails.
 
-### Layer shell
-- `wlr-layer-shell-unstable-v1` support (vendored protocol XML): wallpapers,
-  bars and launchers, stacked in background/bottom/top/overlay scene trees.
-- Windows are tiled inside the area left free by exclusive-zone surfaces.
-- Layer surfaces that request keyboard interactivity (e.g. rofi) receive
-  keyboard focus, and focus is returned to the window when they close.
+### Windows
+- Multiple workspaces per output, with next and previous switching.
+- Fullscreen from client requests and `toggle_fullscreen`.
+- Floating windows with `toggle_floating`.
+- Dialogs and fixed-size windows float automatically.
+- Move a window with `Super` and left drag. Resize it with `Super` and right drag.
+- A window dragged to another monitor moves to that monitor's workspace.
+- Popups such as menus and tooltips.
 
 ### Multi-monitor
-- Independent outputs, each with its own workspace and usable area.
-- Output hotplug: windows of a removed output move to a remaining one.
-- Focused output tracked and updated as windows are focused.
+- Independent outputs, each with its own workspaces and usable area.
+- Windows of a removed or disabled output move to a remaining one.
+- The focused output follows the focused window.
+
+### Layer shell
+- `wlr-layer-shell-unstable-v1` support for wallpapers, bars and launchers.
+- Layers stack as background, bottom, top and overlay.
+- Windows are tiled inside the area left free by exclusive-zone surfaces.
+- Surfaces that ask for the keyboard, such as rofi, get focus.
+  Focus returns to the window when they close.
+
+### Protocols
+- Output management, so `kanshi` and `wlr-randr` work.
+- Screen capture of outputs and single windows.
+  This covers screencopy and ext-image-copy-capture.
+- Clipboard: primary selection and data control.
+- Cursor shape and client-set cursors.
 
 ### Input
-- Keyboard layout, variant, options and repeat settings, applied at startup.
-- Touchpad options (natural scroll, tap to click) via libinput.
-- Keyboard and pointer settings can be changed at runtime and are reapplied
-  to all devices.
+- Keyboard layout, variant, options and repeat settings.
+- Touchpad options such as natural scroll and tap to click.
+- Settings can change at runtime and are reapplied to all devices.
 
 ### Lua configuration
-- `mu` global table with `mu.opts` (gap, border width/colors, touchpad,
-  keyboard) and functions such as `mu.keybind`, `mu.spawn`, `mu.reload`,
-  focus/swap/close/quit, `workspace_next` and `workspace_prev` (not yet implemented).
-- String color support (e.g. `"#rrggbb"`).
-- Runtime option changes take effect immediately.
-- Config reload (duplicate bindings are cleared); a failing config falls
-  back to the default bindings.
-- Event system: `mu.on`, `mu.once`, `mu.off` with `startup` and
-  `config_reload` events.
+- `mu` global table with `mu.opts` and functions such as `mu.keybind`,
+  `mu.spawn`, `mu.reload`, focus, swap, close and quit.
+- Workspace functions, `toggle_fullscreen` and `toggle_floating`.
+- String colors such as `"#rrggbb"`.
+- Option changes take effect immediately.
+- Config reload clears duplicate bindings. A failing config falls back to the
+  default bindings.
+- Events: `mu.on`, `mu.once` and `mu.off`.
+  Available events are `startup`, `config_reload`, `window_open` and
+  `window_close`. The window events carry typed payloads.
+- A generated LuaLS stub for editor completion.
 
 ### Infrastructure
-- File logging to `$XDG_STATE_HOME/muwm/muwm.log` (rotated to `.old`) with
-  timestamps; verbosity controlled by `MUWM_LOG`.
-- CMake generates protocol headers via `add_protocol()` and the
+- File logging to `$XDG_STATE_HOME/muwm/muwm.log`, rotated to `.old`.
+  Verbosity is set with `MUWM_LOG`.
+- CMake generates protocol headers with `add_protocol()` and the
   `muwm_protocols` target.
 
 ### Fixes
 - Crashes when closing a window, quitting, and on startup events.
-- Decoration mode applied before the surface was initialized.
+- Decoration mode was applied before the surface was initialized.
 - First-window keyboard focus.
