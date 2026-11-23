@@ -14,7 +14,47 @@ Toplevel::onMap(void *)
                        && c.min_height > 0 && c.min_height == c.max_height;
     if (xdg->parent || fixed)
         wm->setFloating(this, true);
+
+    // Advertise the window to ext-foreign-toplevel-list; pickers and the
+    // window capture source are keyed on this handle.
+    wlr_ext_foreign_toplevel_handle_v1_state st{
+        xdg->title ? xdg->title : "", xdg->app_id ? xdg->app_id : ""};
+    foreignHandle = wlr_ext_foreign_toplevel_handle_v1_create(
+        wm->foreignToplevelList(), &st);
+    foreignHandle->data = this;
+
     wm->addToplevel(this);
+}
+
+void
+Toplevel::updateForeignHandle()
+{
+    if (!foreignHandle)
+        return;
+    wlr_ext_foreign_toplevel_handle_v1_state st{
+        xdg->title ? xdg->title : "", xdg->app_id ? xdg->app_id : ""};
+    wlr_ext_foreign_toplevel_handle_v1_update_state(foreignHandle, &st);
+}
+
+void
+Toplevel::destroyForeignHandle()
+{
+    if (!foreignHandle)
+        return;
+    wlr_ext_foreign_toplevel_handle_v1_destroy(foreignHandle);
+    foreignHandle = nullptr;
+}
+
+void
+Toplevel::onSetTitle(void *)
+{
+    updateForeignHandle();
+}
+
+void
+Toplevel::onSetAppId(void *)
+{
+    updateForeignHandle();
 }
 
 void
@@ -41,18 +81,22 @@ Toplevel::onRequestFullscreen(void *)
 void
 Toplevel::onUnmap(void *)
 {
+    destroyForeignHandle();
     wm->removeToplevel(this);
 }
 
 void
 Toplevel::onDestroy(void *)
 {
+    destroyForeignHandle();
     wm->removeToplevel(this);
     map.unbind();
     unmap.unbind();
     commit.unbind();
     destroy.unbind();
     requestFullscreen.unbind();
+    setTitle.unbind();
+    setAppId.unbind();
     delete this;
 }
 

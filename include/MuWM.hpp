@@ -44,6 +44,10 @@ public:
     void arrange();
     void arrange(Workspace *workspace);
     void removeOutput(Output *output);
+    wlr_ext_foreign_toplevel_list_v1 *foreignToplevelList() const
+    {
+        return m_foreignList;
+    }
     void publishOutputConfig(); // tell wlr-output-management clients (kanshi)
     void loadConfig();
     void quit();
@@ -133,6 +137,7 @@ private:
     void onLayoutChange(void *data);
     void onNewDecoration(void *data);
     void onNewLayerShellSurface(void *data);
+    void onToplevelCaptureRequest(void *data);
     void onOutputManagerApply(void *data);
     void onOutputManagerTest(void *data);
     bool applyOutputConfig(wlr_output_configuration_v1 *config, bool test);
@@ -168,6 +173,9 @@ private:
     wlr_xdg_decoration_manager_v1 *m_decoManager = nullptr;
     wlr_layer_shell_v1 *m_layerShell             = nullptr;
     wlr_output_manager_v1 *m_outputManager       = nullptr;
+    wlr_ext_foreign_toplevel_list_v1 *m_foreignList = nullptr;
+    wlr_ext_foreign_toplevel_image_capture_source_manager_v1
+        *m_toplevelCaptureManager = nullptr;
     Output *m_focusedOutput                      = nullptr;
     std::vector<Output *> m_outputs;
     std::vector<Keyboard *> m_keyboards;
@@ -186,6 +194,7 @@ private:
     Listener<MuWM> m_newLayerShellSurface;
     Listener<MuWM> m_layoutChange;
     Listener<MuWM> m_newDecoration;
+    Listener<MuWM> m_captureRequest;
     Listener<MuWM> m_outputApply;
     Listener<MuWM> m_outputTest;
 

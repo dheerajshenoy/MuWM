@@ -31,6 +31,7 @@ MuWM::~MuWM()
     m_newInput.unbind();
     m_newDecoration.unbind();
     m_layoutChange.unbind();
+    m_captureRequest.unbind();
     m_outputApply.unbind();
     m_outputTest.unbind();
     // wlroots asserts that a cursor has no listeners left when destroyed
@@ -166,6 +167,16 @@ MuWM::init()
     wlr_subcompositor_create(m_display);
     wlr_xdg_output_manager_v1_create(m_display, m_layout); // bars need it
     wlr_data_device_manager_create(m_display);
+    wlr_ext_image_copy_capture_manager_v1_create(m_display, 1);
+    wlr_ext_output_image_capture_source_manager_v1_create(m_display, 1);
+    wlr_screencopy_manager_v1_create(m_display);
+    m_foreignList = wlr_ext_foreign_toplevel_list_v1_create(m_display, 1);
+    m_toplevelCaptureManager
+        = wlr_ext_foreign_toplevel_image_capture_source_manager_v1_create(
+            m_display, 1);
+    m_captureRequest.bind<&MuWM::onToplevelCaptureRequest>(
+        &m_toplevelCaptureManager->events.new_request, this);
+    // wlr_xdg_decoration_manager_v1_create(m_display);
 
     m_xdgShell = wlr_xdg_shell_create(m_display, 6);
     m_newToplevel.bind<&MuWM::onNewToplevel>(&m_xdgShell->events.new_toplevel,
@@ -209,8 +220,8 @@ MuWM::init()
     m_outputManager = wlr_output_manager_v1_create(m_display);
     m_outputApply.bind<&MuWM::onOutputManagerApply>(
         &m_outputManager->events.apply, this);
-    m_outputTest.bind<&MuWM::onOutputManagerTest>(
-        &m_outputManager->events.test, this);
+    m_outputTest.bind<&MuWM::onOutputManagerTest>(&m_outputManager->events.test,
+                                                  this);
 
     return true;
 }
@@ -328,6 +339,26 @@ MuWM::applyOutputConfig(wlr_output_configuration_v1 *config, bool test)
 }
 
 void
+MuWM::onToplevelCaptureRequest(void *data)
+{
+    auto *req = static_cast<
+        wlr_ext_foreign_toplevel_image_capture_source_manager_v1_request *>(
+        data);
+    auto *t = static_cast<Toplevel *>(req->toplevel_handle->data);
+    if (!t)
+        return;
+
+    wlr_ext_image_capture_source_v1 *source
+        = wlr_ext_image_capture_source_v1_create_with_scene_node(
+            &t->surfaceTree->node, wl_display_get_event_loop(m_display),
+            m_allocator, m_renderer);
+    if (!source)
+        return;
+    wlr_ext_foreign_toplevel_image_capture_source_manager_v1_request_accept(
+        req, source);
+}
+
+void
 MuWM::onOutputManagerApply(void *data)
 {
     auto *config = static_cast<wlr_output_configuration_v1 *>(data);
@@ -390,7 +421,8 @@ void
 MuWM::handleNewToplevel(wlr_xdg_toplevel *xdg)
 {
     auto *t = new Toplevel{this, xdg};
-    t->tree = wlr_scene_xdg_surface_create(m_windowTree, xdg->base);
+    t->tree        = wlr_scene_tree_create(m_windowTree);
+    t->surfaceTree = wlr_scene_xdg_surface_create(t->tree, xdg->base);
     t->id   = m_globalTopLevelId++;
 
     for (auto &r : t->border)
@@ -404,6 +436,8 @@ MuWM::handleNewToplevel(wlr_xdg_toplevel *xdg)
     t->unmap.bind<&Toplevel::onUnmap>(&xdg->base->surface->events.unmap, t);
     t->requestFullscreen.bind<&Toplevel::onRequestFullscreen>(
         &xdg->events.request_fullscreen, t);
+    t->setTitle.bind<&Toplevel::onSetTitle>(&xdg->events.set_title, t);
+    t->setAppId.bind<&Toplevel::onSetAppId>(&xdg->events.set_app_id, t);
 }
 
 void
