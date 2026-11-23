@@ -12,6 +12,7 @@ struct Toplevel
     wlr_xdg_toplevel *xdg     = nullptr;
     wlr_scene_tree *tree      = nullptr;
     wlr_scene_rect *border[4] = {}; // top, bottom, left, right
+    wlr_box floatBox          = {};
     Listener<Toplevel> map;
     Listener<Toplevel> unmap;
     Listener<Toplevel> commit;

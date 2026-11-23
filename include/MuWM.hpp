@@ -59,6 +59,8 @@ public:
     void focusWorkspace(int index);
     void windowToWorkspace(int index);
     void toggleFullscreen();
+    void toggleFloating();
+    void setFloating(Toplevel *, bool floating);
     void setFullscreen(Toplevel *, bool fullscreen);
     void setMasterRatio(float ratio);
 
@@ -137,6 +139,10 @@ private:
     void switchWorkspace(Output *, Workspace *);
     void toplevelToWorkspace(Toplevel *, Workspace *);
     void updateFullscreenLayers(Output *);
+    void placeFloating(Toplevel *);
+    void raiseFloaters(Workspace *);
+    void beginGrab(Toplevel *, bool resize);
+    void endGrab();
 
 private:
     bool m_ok = false;
@@ -175,6 +181,19 @@ private:
     Listener<MuWM> m_newLayerShellSurface;
     Listener<MuWM> m_layoutChange;
     Listener<MuWM> m_newDecoration;
+
+    // Super+drag: left button moves a window, right button resizes it.
+    enum class Grab
+    {
+        None,
+        Move,
+        Resize
+    };
+    Grab m_grab            = Grab::None;
+    Toplevel *m_grabbed    = nullptr;
+    double m_grabX         = 0; // cursor offset (move) or start point (resize)
+    double m_grabY         = 0;
+    wlr_box m_grabBox      = {}; // floatBox when the grab started
 
     Config m_config;
     std::vector<LayerShellSurface *> m_layerSurfaces;

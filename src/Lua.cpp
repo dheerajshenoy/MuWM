@@ -865,6 +865,10 @@ MuWM::initLuaBindings()
         // focused window.
         funcField("toggle_fullscreen", luaCall<&MuWM::toggleFullscreen>),
 
+        // lua ---@field toggle_floating fun() Toggle floating for the focused
+        // window.
+        funcField("toggle_floating", luaCall<&MuWM::toggleFloating>),
+
         // lua ---@field focus_next fun() Focus the next window.
         funcField("focus_next", luaCall<&MuWM::focusNext>),
 

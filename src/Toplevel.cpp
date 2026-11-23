@@ -7,6 +7,13 @@ Toplevel::onMap(void *)
 {
     wlr_log(WLR_INFO, "Window mapped: %s",
             xdg->title ? xdg->title : "(untitled)");
+    // Dialogs (they have a parent) and fixed-size windows don't belong in the
+    // tiled layout.
+    const auto &c    = xdg->current;
+    const bool fixed = c.min_width > 0 && c.min_width == c.max_width
+                       && c.min_height > 0 && c.min_height == c.max_height;
+    if (xdg->parent || fixed)
+        wm->setFloating(this, true);
     wm->addToplevel(this);
 }
 

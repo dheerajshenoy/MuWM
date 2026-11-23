@@ -7,7 +7,9 @@
 #include "Pointer.hpp"
 #include "Toplevel.hpp"
 
+#include <algorithm>
 #include <csignal>
+#include <linux/input-event-codes.h>
 #include <unistd.h>
 
 MuWM::MuWM(const argparse::ArgumentParser &parser) : m_parser(parser)
@@ -557,6 +559,8 @@ MuWM::focusToplevel(Toplevel *t)
             setFullscreen(other, false);
 
     wlr_scene_node_raise_to_top(&t->tree->node);
+    if (!t->floating)
+        raiseFloaters(ws); // a focused tile must not cover floating windows
     if (m_focusedLayer)
         return; // the window is focused again when the layer surface lets go
 
@@ -626,6 +630,9 @@ MuWM::removeToplevel(Toplevel *t)
     if (m_eventBus.hasHandlers(EventType::WindowClose))
         closed = windowInfo(t);
 
+    if (t == m_grabbed)
+        endGrab();
+
     auto &toplevels = ws->toplevels;
 
     std::erase(toplevels, t);
@@ -685,9 +692,21 @@ MuWM::arrange(Workspace *ws)
         return;
     }
 
+    // Floating windows keep their own geometry and stay out of the layout.
+    std::vector<Toplevel *> tiled;
+    for (Toplevel *t : toplevels)
+    {
+        if (t->floating)
+            placeFloating(t);
+        else
+            tiled.push_back(t);
+    }
+    if (tiled.empty())
+        return;
+
     int gap;
 
-    const int n = static_cast<int>(toplevels.size());
+    const int n = static_cast<int>(tiled.size());
 
     if (m_config.gaps.smart && n == 1)
         gap = 0;
@@ -705,13 +724,13 @@ MuWM::arrange(Workspace *ws)
 
     if (n == 1)
     {
-        place(toplevels[0], area.x, area.y, area.width, area.height, borders);
+        place(tiled[0], area.x, area.y, area.width, area.height, borders);
         return;
     }
 
     const int masterW = (area.width - gap) * m_config.layout.master_ratio;
     const int stackW  = area.width - gap - masterW;
-    place(toplevels[0], area.x, area.y, masterW, area.height, borders);
+    place(tiled[0], area.x, area.y, masterW, area.height, borders);
 
     // Integer division would leave the remainder as empty space under the
     // stack, so hand one extra pixel to each of the first `rem` windows.
@@ -723,7 +742,7 @@ MuWM::arrange(Workspace *ws)
     for (int i = 1; i < n; i++)
     {
         const int hi = h + (i - 1 < rem ? 1 : 0);
-        place(toplevels[i], area.x + masterW + gap, y, stackW, hi, borders);
+        place(tiled[i], area.x + masterW + gap, y, stackW, hi, borders);
         y += hi + gap;
     }
 }
@@ -751,6 +770,25 @@ MuWM::toplevelAt(double x, double y, wlr_surface **surface, double *sx,
 void
 MuWM::processMotion(uint32_t timeMsec)
 {
+    if (m_grab != Grab::None && m_grabbed)
+    {
+        wlr_box &b = m_grabbed->floatBox;
+        if (m_grab == Grab::Move)
+        {
+            b.x = static_cast<int>(m_cursor->x - m_grabX);
+            b.y = static_cast<int>(m_cursor->y - m_grabY);
+        }
+        else
+        {
+            b.width  = std::max(
+                100, m_grabBox.width + static_cast<int>(m_cursor->x - m_grabX));
+            b.height = std::max(
+                60, m_grabBox.height + static_cast<int>(m_cursor->y - m_grabY));
+        }
+        placeFloating(m_grabbed);
+        return; // the client doesn't see the pointer during a grab
+    }
+
     wlr_surface *surface = nullptr;
     double sx = 0, sy = 0;
     Toplevel *t = toplevelAt(m_cursor->x, m_cursor->y, &surface, &sx, &sy);
@@ -785,6 +823,31 @@ void
 MuWM::onCursorButton(void *data)
 {
     auto *ev = static_cast<wlr_pointer_button_event *>(data);
+
+    if (ev->state == WL_POINTER_BUTTON_STATE_RELEASED && m_grab != Grab::None)
+    {
+        endGrab();
+        return;
+    }
+
+    if (ev->state == WL_POINTER_BUTTON_STATE_PRESSED
+        && (ev->button == BTN_LEFT || ev->button == BTN_RIGHT))
+    {
+        wlr_keyboard *kb = wlr_seat_get_keyboard(m_seat);
+        if (kb && (wlr_keyboard_get_modifiers(kb) & WLR_MODIFIER_LOGO))
+        {
+            wlr_surface *surface = nullptr;
+            double sx, sy;
+            Toplevel *t
+                = toplevelAt(m_cursor->x, m_cursor->y, &surface, &sx, &sy);
+            if (t && !t->fullscreen)
+            {
+                beginGrab(t, ev->button == BTN_RIGHT);
+                return;
+            }
+        }
+    }
+
     wlr_seat_pointer_notify_button(m_seat, ev->time_msec, ev->button,
                                    ev->state);
 
@@ -1327,4 +1390,97 @@ MuWM::setMasterRatio(float ratio)
     if (ratio < 0.0f || ratio > 1.0f)
         return;
     scheduleApply(ChangeLayout);
+}
+
+void
+MuWM::toggleFloating()
+{
+    if (Toplevel *t = focusedToplevel())
+    {
+        setFloating(t, !t->floating);
+        arrange(t->workspace);
+        wlr_scene_node_raise_to_top(&t->tree->node);
+    }
+}
+
+void
+MuWM::setFloating(Toplevel *t, bool floating)
+{
+    if (t->floating == floating)
+        return;
+    t->floating = floating;
+    if (!floating || t->floatBox.width > 0)
+        return; // reuse the geometry from the last time it floated
+
+    Workspace *ws = t->workspace ? t->workspace : currentWorkspace();
+    wlr_box area  = ws && ws->output ? ws->output->usableArea : wlr_box{};
+    wlr_box geo   = t->xdg->base->geometry;
+
+    // Dialogs keep the size they asked for; a toggled tile gets 60% of the
+    // output. Either way the window is centered.
+    int w = geo.width, h = geo.height;
+    if (!t->xdg->parent || w <= 0 || h <= 0)
+    {
+        if (area.width > 0)
+        {
+            w = area.width * 6 / 10;
+            h = area.height * 6 / 10;
+        }
+        else if (w <= 0 || h <= 0)
+        {
+            w = 800;
+            h = 600;
+        }
+    }
+    t->floatBox = {area.x + (area.width - w) / 2,
+                   area.y + (area.height - h) / 2, w, h};
+}
+
+void
+MuWM::placeFloating(Toplevel *t)
+{
+    const wlr_box &b = t->floatBox;
+    wlr_scene_node_set_position(&t->tree->node, b.x, b.y);
+    wlr_xdg_toplevel_set_size(t->xdg, b.width, b.height);
+    t->setBordersVisible(true);
+    t->resizeBorders(b.width, b.height);
+}
+
+void
+MuWM::raiseFloaters(Workspace *ws)
+{
+    for (Toplevel *t : ws->toplevels)
+        if (t->floating && t != ws->focusedToplevel)
+            wlr_scene_node_raise_to_top(&t->tree->node);
+    if (ws->focusedToplevel && ws->focusedToplevel->floating)
+        wlr_scene_node_raise_to_top(&ws->focusedToplevel->tree->node);
+}
+
+void
+MuWM::beginGrab(Toplevel *t, bool resize)
+{
+    focusToplevel(t);
+    if (!t->floating)
+    {
+        // Pull the tile out of the layout, keeping it where it is.
+        setFloating(t, true);
+        wlr_box geo = t->xdg->base->geometry;
+        t->floatBox = {t->tree->node.x, t->tree->node.y, geo.width, geo.height};
+        arrange(t->workspace);
+    }
+    wlr_scene_node_raise_to_top(&t->tree->node);
+
+    m_grabbed = t;
+    m_grabBox = t->floatBox;
+    m_grab    = resize ? Grab::Resize : Grab::Move;
+    // Move: offset of the cursor inside the window. Resize: the start point.
+    m_grabX = resize ? m_cursor->x : m_cursor->x - t->floatBox.x;
+    m_grabY = resize ? m_cursor->y : m_cursor->y - t->floatBox.y;
+}
+
+void
+MuWM::endGrab()
+{
+    m_grab    = Grab::None;
+    m_grabbed = nullptr;
 }
