@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <csignal>
+#include <sys/wait.h>
 #include <linux/input-event-codes.h>
 #include <unistd.h>
 
@@ -28,6 +29,16 @@ MuWM::~MuWM()
 
     if (m_display)
         wl_display_destroy_clients(m_display);
+
+    // X11 windows are only destroyed with the XWayland server, and their
+    // handlers free scene nodes, so it has to go while the scene still exists.
+    m_xwaylandReady.unbind();
+    m_xwaylandNewSurface.unbind();
+    if (m_xwayland)
+    {
+        wlr_xwayland_destroy(m_xwayland);
+        m_xwayland = nullptr;
+    }
 
     m_newToplevel.unbind();
     m_newPopup.unbind();
@@ -447,7 +458,6 @@ MuWM::run(const std::string &startupCmd)
         return false;
 
     setenv("WAYLAND_DISPLAY", socket, 1);
-    signal(SIGCHLD, SIG_IGN);
     wlr_log(WLR_INFO, "Running on WAYLAND_DISPLAY=%s", socket);
 
     // The config must be loaded before the backend starts: starting it
@@ -1143,12 +1153,22 @@ MuWM::onCursorFrame(void *)
 void
 MuWM::spawn(const std::string &cmd)
 {
-    if (fork() == 0)
+    // Fork twice so the program is adopted by init and never becomes a
+    // zombie. Ignoring SIGCHLD instead would be inherited by Xwayland and break
+    // its xkbcomp child ("Failed to compile keymap").
+    const pid_t pid = fork();
+    if (pid == 0)
     {
         setsid();
-        execl("/bin/sh", "sh", "-c", cmd.c_str(), nullptr);
-        _exit(1);
+        if (fork() == 0)
+        {
+            execl("/bin/sh", "sh", "-c", cmd.c_str(), nullptr);
+            _exit(1);
+        }
+        _exit(0); // the first child exits at once
     }
+    if (pid > 0)
+        waitpid(pid, nullptr, 0); // reap it; the program itself runs on
 }
 
 // An output that kanshi (or wlr-randr) disables leaves the output layout and
