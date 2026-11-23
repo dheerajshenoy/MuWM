@@ -299,6 +299,7 @@ MuWM::handleNewOutput(wlr_output *output)
             wlr_scene_node_reparent(&t->tree->node, t->workspace->sceneTree);
         }
         o->workspace->toplevels       = std::move(m_unassigned.toplevels);
+        o->workspace->focusHistory    = std::move(m_unassigned.focusHistory);
         o->workspace->focusedToplevel = m_unassigned.focusedToplevel;
         m_unassigned                  = {};
     }
@@ -699,6 +700,11 @@ MuWM::focusToplevel(Toplevel *t)
         m_focusedOutput = ws->output;
     ws->focusedToplevel = t;
 
+    // Erase first so the window can't appear twice, then make it the most
+    // recent entry (the back).
+    std::erase(ws->focusHistory, t);
+    ws->focusHistory.push_back(t);
+
     // Focusing another window would hide it behind the fullscreen one.
     for (Toplevel *other : std::vector<Toplevel *>(ws->toplevels))
         if (other != t && other->fullscreen)
@@ -825,12 +831,21 @@ MuWM::removeToplevel(Toplevel *t)
     auto &toplevels = ws->toplevels;
 
     std::erase(toplevels, t);
+    std::erase(ws->focusHistory, t);
+
     t->workspace = nullptr;
     if (ws->focusedToplevel == t)
         ws->focusedToplevel = nullptr;
     arrange(ws);
-    if (ws == currentWorkspace() && !ws->focusedToplevel && !toplevels.empty())
-        focusToplevel(toplevels.back());
+
+    // The window used before the closed one is the most recent history entry.
+    if (!ws->focusedToplevel && !ws->focusHistory.empty())
+    {
+        if (ws == currentWorkspace())
+            focusToplevel(ws->focusHistory.back());
+        else
+            ws->focusedToplevel = ws->focusHistory.back(); // hidden workspace
+    }
 
     m_eventBus.emit(EventType::WindowClose, closed);
 }
@@ -1454,6 +1469,12 @@ MuWM::removeOutput(Output *output)
         if (!target->focusedToplevel)
             target->focusedToplevel = ws->focusedToplevel;
 
+        // The moved windows are older than anything the target already used,
+        // so they go in front of its history, in their own order.
+        target->focusHistory.insert(target->focusHistory.begin(),
+                                    ws->focusHistory.begin(),
+                                    ws->focusHistory.end());
+        ws->focusHistory.clear();
         ws->toplevels.clear();
         ws->focusedToplevel = nullptr;
     }
@@ -1561,22 +1582,58 @@ MuWM::toplevelToWorkspace(Toplevel *toplevel, Workspace *ws_target)
     if (!toplevel || !ws_target || toplevel->workspace == ws_target)
         return;
 
+    // A visible target is where the user is looking (a drag onto another
+    // monitor, an evacuated window), so the window takes the focus there.
+    // A hidden one (Super+Shift+N) must not steal the keyboard.
+    const bool targetVisible
+        = ws_target->output && ws_target->output->workspace == ws_target;
+
     Workspace *ws_old = toplevel->workspace;
+    Toplevel *prev    = nullptr; // what the old workspace used before
     if (ws_old)
     {
         std::erase(ws_old->toplevels, toplevel);
+        std::erase(ws_old->focusHistory, toplevel);
+        if (!ws_old->focusHistory.empty())
+            prev = ws_old->focusHistory.back();
         if (ws_old->focusedToplevel == toplevel)
             ws_old->focusedToplevel = nullptr;
     }
 
     toplevel->workspace = ws_target;
     ws_target->toplevels.push_back(toplevel);
+
     wlr_scene_node_reparent(&toplevel->tree->node, ws_target->sceneTree);
 
-    arrange(ws_old);
+    if (ws_old)
+        arrange(ws_old);
     arrange(ws_target);
 
-    focusToplevel(toplevel);
+    if (targetVisible)
+    {
+        focusToplevel(toplevel); // also puts it at the back of the new history
+        if (ws_old && !ws_old->focusedToplevel)
+            ws_old->focusedToplevel = prev; // no keyboard change, just state
+        return;
+    }
+
+    // Hidden target: remember the window as that workspace's most recent, so
+    // it is focused when the user switches there.
+    std::erase(ws_target->focusHistory, toplevel);
+    ws_target->focusHistory.push_back(toplevel);
+    ws_target->focusedToplevel = toplevel;
+    wlr_xdg_toplevel_set_activated(toplevel->xdg, false);
+    toplevel->setFocused(false);
+
+    if (ws_old == currentWorkspace())
+    {
+        if (prev)
+            focusToplevel(prev); // keyboard goes to the old workspace's window
+        else
+            wlr_seat_keyboard_notify_clear_focus(m_seat);
+    }
+    else if (ws_old)
+        ws_old->focusedToplevel = prev;
 }
 
 void
