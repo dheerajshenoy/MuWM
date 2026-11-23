@@ -35,6 +35,11 @@ extern "C"
 #include <wlr/types/wlr_xdg_decoration_v1.h>
 #include <wlr/types/wlr_xdg_output_v1.h>
 #include <wlr/types/wlr_xdg_shell.h>
+#include <wlr/types/wlr_primary_selection_v1.h>
+#include <wlr/types/wlr_primary_selection.h>
+#include <wlr/types/wlr_xdg_dialog_v1.h>
+#include <wlr/types/wlr_data_control_v1.h>
+#include <wlr/types/wlr_ext_data_control_v1.h>
 #include <wlr/util/log.h>
 #include <xkbcommon/xkbcommon.h>
 #undef static

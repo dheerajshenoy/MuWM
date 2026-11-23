@@ -1,5 +1,6 @@
 #include "MuWM.hpp"
 
+#include "Popup.hpp"
 #include "Decoration.hpp"
 #include "Keyboard.hpp"
 #include "LayerShellSurface.hpp"
@@ -27,6 +28,7 @@ MuWM::~MuWM()
         wl_display_destroy_clients(m_display);
 
     m_newToplevel.unbind();
+    m_newPopup.unbind();
     m_newLayerShellSurface.unbind();
     m_newInput.unbind();
     m_newDecoration.unbind();
@@ -40,6 +42,8 @@ MuWM::~MuWM()
     m_cursorButton.unbind();
     m_cursorAxis.unbind();
     m_cursorFrame.unbind();
+    m_requestSetSelection.unbind();
+    m_requestSetPrimary.unbind();
 
     if (m_outputListener.listener.link.prev)
         wl_list_remove(&m_outputListener.listener.link);
@@ -163,6 +167,7 @@ MuWM::init()
     m_layerTrees[ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY]
         = wlr_scene_tree_create(&m_scene->tree);
 
+    // protocols creations
     wlr_compositor_create(m_display, 5, m_renderer);
     wlr_subcompositor_create(m_display);
     wlr_xdg_output_manager_v1_create(m_display, m_layout); // bars need it
@@ -170,10 +175,15 @@ MuWM::init()
     wlr_ext_image_copy_capture_manager_v1_create(m_display, 1);
     wlr_ext_output_image_capture_source_manager_v1_create(m_display, 1);
     wlr_screencopy_manager_v1_create(m_display);
+    wlr_primary_selection_v1_device_manager_create(m_display);
+    wlr_ext_data_control_manager_v1_create(m_display, 1);
+    wlr_data_control_manager_v1_create(m_display);
+
     m_foreignList = wlr_ext_foreign_toplevel_list_v1_create(m_display, 1);
     m_toplevelCaptureManager
         = wlr_ext_foreign_toplevel_image_capture_source_manager_v1_create(
             m_display, 1);
+
     m_captureRequest.bind<&MuWM::onToplevelCaptureRequest>(
         &m_toplevelCaptureManager->events.new_request, this);
     // wlr_xdg_decoration_manager_v1_create(m_display);
@@ -181,6 +191,7 @@ MuWM::init()
     m_xdgShell = wlr_xdg_shell_create(m_display, 6);
     m_newToplevel.bind<&MuWM::onNewToplevel>(&m_xdgShell->events.new_toplevel,
                                              this);
+    m_newPopup.bind<&MuWM::onNewPopup>(&m_xdgShell->events.new_popup, this);
 
     m_seat = wlr_seat_create(m_display, "seat0");
     wlr_seat_set_capabilities(m_seat, WL_SEAT_CAPABILITY_POINTER
@@ -197,6 +208,10 @@ MuWM::init()
     m_cursorAxis.bind<&MuWM::onCursorAxis>(&m_cursor->events.axis, this);
     m_cursorFrame.bind<&MuWM::onCursorFrame>(&m_cursor->events.frame, this);
     m_newInput.bind<&MuWM::onNewInput>(&m_backend->events.new_input, this);
+    m_requestSetSelection.bind<&MuWM::onRequestSetSelection>(
+        &m_seat->events.request_set_selection, this);
+    m_requestSetPrimary.bind<&MuWM::onRequestSetPrimarySelection>(
+        &m_seat->events.request_set_primary_selection, this);
 
     m_outputListener.wm = this;
 
@@ -420,10 +435,11 @@ MuWM::onNewToplevel(void *data)
 void
 MuWM::handleNewToplevel(wlr_xdg_toplevel *xdg)
 {
-    auto *t = new Toplevel{this, xdg};
+    auto *t        = new Toplevel{this, xdg};
     t->tree        = wlr_scene_tree_create(m_windowTree);
     t->surfaceTree = wlr_scene_xdg_surface_create(t->tree, xdg->base);
-    t->id   = m_globalTopLevelId++;
+    xdg->base->data = t->surfaceTree; // popups look their parent's tree up here
+    t->id          = m_globalTopLevelId++;
 
     for (auto &r : t->border)
         r = wlr_scene_rect_create(t->tree, 1, 1,
@@ -1605,4 +1621,57 @@ MuWM::endGrab()
 {
     m_grab    = Grab::None;
     m_grabbed = nullptr;
+}
+
+void
+MuWM::onRequestSetSelection(void *data)
+{
+    auto *ev = static_cast<wlr_seat_request_set_selection_event *>(data);
+    wlr_seat_set_selection(m_seat, ev->source, ev->serial);
+}
+
+void
+MuWM::onRequestSetPrimarySelection(void *data)
+{
+    auto *ev
+        = static_cast<wlr_seat_request_set_primary_selection_event *>(data);
+    wlr_seat_set_primary_selection(m_seat, ev->source, ev->serial);
+}
+
+void
+MuWM::onNewPopup(void *data)
+{
+    auto *xdg                  = static_cast<wlr_xdg_popup *>(data);
+    wlr_scene_tree *parentTree = nullptr;
+
+    if (xdg->parent)
+    {
+        if (wlr_xdg_surface *parent
+            = wlr_xdg_surface_try_from_wlr_surface(xdg->parent))
+            parentTree = static_cast<wlr_scene_tree *>(parent->data);
+        else if (wlr_layer_surface_v1 *layer
+                 = wlr_layer_surface_v1_try_from_wlr_surface(xdg->parent))
+        {
+            // A bar's menu: hang it off the layer surface's own tree.
+            for (LayerShellSurface *s : m_layerSurfaces)
+                if (s->layerSurface == layer)
+                {
+                    parentTree = s->scene->tree;
+                    break;
+                }
+        }
+    }
+
+    if (!parentTree)
+    {
+        wlr_log(WLR_ERROR, "Dismissing popup: no scene tree for its parent");
+        wlr_xdg_popup_destroy(xdg); // unknown parent: dismiss it
+        return;
+    }
+
+    xdg->base->data = wlr_scene_xdg_surface_create(parentTree, xdg->base);
+
+    auto *p = new Popup{this, xdg, parentTree};
+    p->commit.bind<&Popup::onCommit>(&xdg->base->surface->events.commit, p);
+    p->destroy.bind<&Popup::onDestroy>(&xdg->events.destroy, p);
 }

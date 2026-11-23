@@ -5,6 +5,7 @@
 void
 Toplevel::onMap(void *)
 {
+    wlr_scene_node_set_enabled(&tree->node, true); // undo the hide from unmap
     wlr_log(WLR_INFO, "Window mapped: %s",
             xdg->title ? xdg->title : "(untitled)");
     // Dialogs (they have a parent) and fixed-size windows don't belong in the
@@ -81,6 +82,7 @@ Toplevel::onRequestFullscreen(void *)
 void
 Toplevel::onUnmap(void *)
 {
+    wlr_scene_node_set_enabled(&tree->node, false); // hides the borders too
     destroyForeignHandle();
     wm->removeToplevel(this);
 }
@@ -90,6 +92,7 @@ Toplevel::onDestroy(void *)
 {
     destroyForeignHandle();
     wm->removeToplevel(this);
+    wlr_scene_node_destroy(&tree->node); // container, surface tree and borders
     map.unbind();
     unmap.unbind();
     commit.unbind();

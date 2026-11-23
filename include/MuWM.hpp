@@ -52,6 +52,11 @@ public:
     void loadConfig();
     void quit();
 
+    wlr_output_layout *layout() const
+    {
+        return m_layout;
+    }
+
     // Window
     void focusNext();
     void focusPrev();
@@ -140,7 +145,11 @@ private:
     void onToplevelCaptureRequest(void *data);
     void onOutputManagerApply(void *data);
     void onOutputManagerTest(void *data);
+    void onNewPopup(void *data);
     bool applyOutputConfig(wlr_output_configuration_v1 *config, bool test);
+
+    void onRequestSetSelection(void *data);
+    void onRequestSetPrimarySelection(void *data);
 
     void initLua();
     void initLuaBindings();
@@ -159,24 +168,24 @@ private:
     void installDefaultBindings();
     const argparse::ArgumentParser &m_parser;
 
-    wl_display *m_display                        = nullptr;
-    wlr_backend *m_backend                       = nullptr;
-    wlr_renderer *m_renderer                     = nullptr;
-    wlr_allocator *m_allocator                   = nullptr;
-    wlr_scene *m_scene                           = nullptr;
-    wlr_output_layout *m_layout                  = nullptr;
-    wlr_scene_output_layout *m_sceneLayout       = nullptr;
-    wlr_seat *m_seat                             = nullptr;
-    wlr_xdg_shell *m_xdgShell                    = nullptr;
-    wlr_cursor *m_cursor                         = nullptr;
-    wlr_xcursor_manager *m_xcursor               = nullptr;
-    wlr_xdg_decoration_manager_v1 *m_decoManager = nullptr;
-    wlr_layer_shell_v1 *m_layerShell             = nullptr;
-    wlr_output_manager_v1 *m_outputManager       = nullptr;
+    wl_display *m_display                           = nullptr;
+    wlr_backend *m_backend                          = nullptr;
+    wlr_renderer *m_renderer                        = nullptr;
+    wlr_allocator *m_allocator                      = nullptr;
+    wlr_scene *m_scene                              = nullptr;
+    wlr_output_layout *m_layout                     = nullptr;
+    wlr_scene_output_layout *m_sceneLayout          = nullptr;
+    wlr_seat *m_seat                                = nullptr;
+    wlr_xdg_shell *m_xdgShell                       = nullptr;
+    wlr_cursor *m_cursor                            = nullptr;
+    wlr_xcursor_manager *m_xcursor                  = nullptr;
+    wlr_xdg_decoration_manager_v1 *m_decoManager    = nullptr;
+    wlr_layer_shell_v1 *m_layerShell                = nullptr;
+    wlr_output_manager_v1 *m_outputManager          = nullptr;
     wlr_ext_foreign_toplevel_list_v1 *m_foreignList = nullptr;
     wlr_ext_foreign_toplevel_image_capture_source_manager_v1
         *m_toplevelCaptureManager = nullptr;
-    Output *m_focusedOutput                      = nullptr;
+    Output *m_focusedOutput       = nullptr;
     std::vector<Output *> m_outputs;
     std::vector<Keyboard *> m_keyboards;
     std::vector<Pointer *> m_pointers;
@@ -184,6 +193,7 @@ private:
 
     OutputListener m_outputListener;
 
+    // Listeners
     Listener<MuWM> m_cursorMotion;
     Listener<MuWM> m_cursorMotionAbs;
     Listener<MuWM> m_cursorButton;
@@ -197,6 +207,9 @@ private:
     Listener<MuWM> m_captureRequest;
     Listener<MuWM> m_outputApply;
     Listener<MuWM> m_outputTest;
+    Listener<MuWM> m_requestSetSelection;
+    Listener<MuWM> m_requestSetPrimary;
+    Listener<MuWM> m_newPopup;
 
     // Super+drag: left button moves a window, right button resizes it.
     enum class Grab

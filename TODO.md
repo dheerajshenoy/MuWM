@@ -22,9 +22,9 @@ Tiling Wayland compositor in C++ on wlroots (CMake).
 - [x] Swap / promote a window to master
 - [x] Verify output resize re-tiles (`request_state` + layout `change`)
 - [x] Clean shutdown on SIGINT / SIGTERM (destroy listeners, `wl_display_destroy_clients`)
-- [ ] xdg popups (menus, tooltips). Without them, right-click menus won't show
 - [x] Fullscreen (client requests and `toggle_fullscreen`)
 - [x] Floating windows: `toggle_floating`, auto-float for dialogs and fixed-size windows, Super+drag move / resize
+- [ ] xdg popups (menus, tooltips). Without them, right-click menus won't show
 - [ ] Floating: honour client `request_move` / `request_resize`, and re-center on output change
 - [ ] Client cursor shape (`request_set_cursor`, cursor-shape-v1)
 
@@ -54,20 +54,20 @@ Tiling Wayland compositor in C++ on wlroots (CMake).
 - [x] wlr-layer-shell (bars, launchers such as waybar, fuzzel)
 - [x] xdg-output and output management (wlr-randr, kanshi)
 - [x] Screen capture (screencopy / ext-image-copy-capture) and xdg-desktop-portal-wlr
+- [x] primary-selection and data-control (clipboard managers)
 - [ ] Window capture of windows on hidden workspaces (their scene node is disabled, so the frame is blank)
 - [ ] Test capture end to end: `grim`, then a browser share through the portal
 - [ ] Disabling an output with kanshi should move its windows to another output
 - [ ] Session lock (swaylock), idle-notify, idle-inhibit
-- [ ] primary-selection and data-control (clipboard managers)
 - [ ] xdg-activation, pointer-constraints (games), fractional-scale + viewporter
 - [ ] XWayland (`wlr_xwayland`) for X11 apps
 
 ## Real hardware
 
+- [x] Touchpad settings via libinput (tap-to-click, natural scroll)
 - [ ] Run from a TTY (DRM/KMS backend, libseat)
 - [ ] Output and input hotplug (add and remove)
 - [ ] Session entry: `/usr/share/wayland-sessions/muwm.desktop`, `XDG_CURRENT_DESKTOP`, `XDG_SESSION_TYPE`, dbus activation environment
-- [x] Touchpad settings via libinput (tap-to-click, natural scroll)
 
 ## Quality and packaging
 
