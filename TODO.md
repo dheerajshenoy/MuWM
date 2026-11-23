@@ -24,8 +24,8 @@ Tiling Wayland compositor in C++ on wlroots (CMake).
 - [x] Clean shutdown on SIGINT / SIGTERM (destroy listeners, `wl_display_destroy_clients`)
 - [x] Fullscreen (client requests and `toggle_fullscreen`)
 - [x] Floating windows: `toggle_floating`, auto-float for dialogs and fixed-size windows, Super+drag move / resize
-- [ ] xdg popups (menus, tooltips). Without them, right-click menus won't show
-- [ ] Floating: honour client `request_move` / `request_resize`, and re-center on output change
+- [x] xdg popups (menus, tooltips). Without them, right-click menus won't show
+- [x] Floating: honour client `request_move` / `request_resize`, and re-center on output change
 - [ ] Client cursor shape (`request_set_cursor`, cursor-shape-v1)
 
 ## Configuration (Lua)
@@ -57,7 +57,7 @@ Tiling Wayland compositor in C++ on wlroots (CMake).
 - [x] primary-selection and data-control (clipboard managers)
 - [ ] Window capture of windows on hidden workspaces (their scene node is disabled, so the frame is blank)
 - [ ] Test capture end to end: `grim`, then a browser share through the portal
-- [ ] Disabling an output with kanshi should move its windows to another output
+- [x] Disabling an output with kanshi moves its windows and focus to another output
 - [ ] Session lock (swaylock), idle-notify, idle-inhibit
 - [ ] xdg-activation, pointer-constraints (games), fractional-scale + viewporter
 - [ ] XWayland (`wlr_xwayland`) for X11 apps

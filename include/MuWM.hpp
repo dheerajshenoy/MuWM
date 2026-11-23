@@ -142,12 +142,12 @@ private:
     void onLayoutChange(void *data);
     void onNewDecoration(void *data);
     void onNewLayerShellSurface(void *data);
+    void onCursorShape(void *data);
     void onToplevelCaptureRequest(void *data);
     void onOutputManagerApply(void *data);
     void onOutputManagerTest(void *data);
     void onNewPopup(void *data);
     bool applyOutputConfig(wlr_output_configuration_v1 *config, bool test);
-
     void onRequestSetSelection(void *data);
     void onRequestSetPrimarySelection(void *data);
 
@@ -156,6 +156,7 @@ private:
     void cycleWorkspace(int delta);
     void switchWorkspace(Output *, Workspace *);
     void toplevelToWorkspace(Toplevel *, Workspace *);
+    void evacuateInactiveOutputs();
     void updateFullscreenLayers(Output *);
     void placeFloating(Toplevel *);
     void raiseFloaters(Workspace *);
@@ -182,6 +183,7 @@ private:
     wlr_xdg_decoration_manager_v1 *m_decoManager    = nullptr;
     wlr_layer_shell_v1 *m_layerShell                = nullptr;
     wlr_output_manager_v1 *m_outputManager          = nullptr;
+    wlr_cursor_shape_manager_v1 *m_cursorShapeManager = nullptr;
     wlr_ext_foreign_toplevel_list_v1 *m_foreignList = nullptr;
     wlr_ext_foreign_toplevel_image_capture_source_manager_v1
         *m_toplevelCaptureManager = nullptr;
@@ -199,6 +201,7 @@ private:
     Listener<MuWM> m_cursorButton;
     Listener<MuWM> m_cursorAxis;
     Listener<MuWM> m_cursorFrame;
+    Listener<MuWM> m_cursorShape;
     Listener<MuWM> m_newInput;
     Listener<MuWM> m_newToplevel;
     Listener<MuWM> m_newLayerShellSurface;

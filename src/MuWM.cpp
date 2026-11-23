@@ -1,11 +1,11 @@
 #include "MuWM.hpp"
 
-#include "Popup.hpp"
 #include "Decoration.hpp"
 #include "Keyboard.hpp"
 #include "LayerShellSurface.hpp"
 #include "Output.hpp"
 #include "Pointer.hpp"
+#include "Popup.hpp"
 #include "Toplevel.hpp"
 
 #include <algorithm>
@@ -178,6 +178,9 @@ MuWM::init()
     wlr_primary_selection_v1_device_manager_create(m_display);
     wlr_ext_data_control_manager_v1_create(m_display, 1);
     wlr_data_control_manager_v1_create(m_display);
+    m_cursorShapeManager = wlr_cursor_shape_manager_v1_create(m_display, 1);
+    m_cursorShape.bind<&MuWM::onCursorShape>(
+        &m_cursorShapeManager->events.request_set_shape, this);
 
     m_foreignList = wlr_ext_foreign_toplevel_list_v1_create(m_display, 1);
     m_toplevelCaptureManager
@@ -435,11 +438,11 @@ MuWM::onNewToplevel(void *data)
 void
 MuWM::handleNewToplevel(wlr_xdg_toplevel *xdg)
 {
-    auto *t        = new Toplevel{this, xdg};
-    t->tree        = wlr_scene_tree_create(m_windowTree);
-    t->surfaceTree = wlr_scene_xdg_surface_create(t->tree, xdg->base);
+    auto *t         = new Toplevel{this, xdg};
+    t->tree         = wlr_scene_tree_create(m_windowTree);
+    t->surfaceTree  = wlr_scene_xdg_surface_create(t->tree, xdg->base);
     xdg->base->data = t->surfaceTree; // popups look their parent's tree up here
-    t->id          = m_globalTopLevelId++;
+    t->id           = m_globalTopLevelId++;
 
     for (auto &r : t->border)
         r = wlr_scene_rect_create(t->tree, 1, 1,
@@ -768,7 +771,12 @@ MuWM::removeToplevel(Toplevel *t)
         closed = windowInfo(t);
 
     if (t == m_grabbed)
-        endGrab();
+    {
+        // The window is going away: just drop the grab. Moving it to another
+        // workspace now would leave a dangling pointer in that workspace.
+        m_grab    = Grab::None;
+        m_grabbed = nullptr;
+    }
 
     auto &toplevels = ws->toplevels;
 
@@ -1024,9 +1032,45 @@ MuWM::spawn(const std::string &cmd)
     }
 }
 
+// An output that kanshi (or wlr-randr) disables leaves the output layout and
+// has an empty box, so nothing on it can be tiled: arrange() returns early and
+// its windows stay unplaced. Move the focus and the windows to an active
+// output instead.
+void
+MuWM::evacuateInactiveOutputs()
+{
+    auto active = [this](Output *o)
+    {
+        return wlr_output_layout_get(m_layout, o->output) != nullptr;
+    };
+
+    Output *fallback = nullptr; // first output that is still in the layout
+    for (Output *o : m_outputs)
+        if (active(o))
+        {
+            fallback = o;
+            break;
+        }
+    if (!fallback)
+        return;
+
+    if (m_focusedOutput && !active(m_focusedOutput))
+        m_focusedOutput = fallback;
+
+    for (Output *o : m_outputs)
+    {
+        if (active(o))
+            continue;
+        for (Workspace *ws : o->workspaces)
+            for (Toplevel *t : std::vector<Toplevel *>(ws->toplevels))
+                toplevelToWorkspace(t, fallback->workspace);
+    }
+}
+
 void
 MuWM::onLayoutChange(void *)
 {
+    evacuateInactiveOutputs(); // before arrange(): dead outputs have no area
     arrange();
     publishOutputConfig();
 }
@@ -1619,8 +1663,26 @@ MuWM::beginGrab(Toplevel *t, bool resize)
 void
 MuWM::endGrab()
 {
-    m_grab    = Grab::None;
-    m_grabbed = nullptr;
+    Toplevel *t = m_grabbed; // the window that was dragged, not the focused one
+    m_grab      = Grab::None;
+    m_grabbed   = nullptr;
+
+    if (!t || !t->workspace || !t->workspace->output)
+        return;
+
+    wlr_output *under = wlr_output_layout_output_at(
+        m_layout, t->floatBox.x + t->floatBox.width / 2.0,
+        t->floatBox.y + t->floatBox.height / 2.0);
+    if (!under)
+        return; // center is off every output: stay where we are
+
+    for (Output *o : m_outputs)
+        if (o->output == under)
+        {
+            if (o != t->workspace->output)
+                toplevelToWorkspace(t, o->workspace);
+            return;
+        }
 }
 
 void
@@ -1674,4 +1736,17 @@ MuWM::onNewPopup(void *data)
     auto *p = new Popup{this, xdg, parentTree};
     p->commit.bind<&Popup::onCommit>(&xdg->base->surface->events.commit, p);
     p->destroy.bind<&Popup::onDestroy>(&xdg->events.destroy, p);
+}
+
+void
+MuWM::onCursorShape(void *data)
+{
+    auto *ev
+        = static_cast<wlr_cursor_shape_manager_v1_request_set_shape_event *>(
+            data);
+    if (ev->seat_client == m_seat->pointer_state.focused_client)
+    {
+        wlr_cursor_set_xcursor(m_cursor, m_xcursor,
+                               wlr_cursor_shape_v1_name(ev->shape));
+    }
 }
