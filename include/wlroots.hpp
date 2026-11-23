@@ -3,6 +3,7 @@
 #define WLR_USE_UNSTABLE // wlroots APIs are unstable; required to include them
 extern "C"
 {
+    // clang-format off
 #include <wayland-server-core.h>
 #define static // makes `float c[static 4]` legal in C++
 #include <wlr/backend.h>
@@ -13,9 +14,6 @@ extern "C"
 #include <wlr/types/wlr_data_device.h>
 #include <wlr/types/wlr_input_device.h>
 #include <wlr/types/wlr_keyboard.h>
-// `namespace` is a C++ keyword but the layer-shell headers use it as a name
-// (struct member and parameter); rename it for this include only. In C++ code
-// the member is therefore `layer_surface->namespace_`.
 #define namespace namespace_
 #include <wlr/types/wlr_layer_shell_v1.h>
 #undef namespace
@@ -43,6 +41,17 @@ extern "C"
 #include <wlr/types/wlr_xdg_output_v1.h>
 #include <wlr/types/wlr_xdg_shell.h>
 #include <wlr/util/log.h>
+// xwayland.h has a member called `class`. Include everything it pulls in first,
+// so the rename below only affects that one header, not pthread.h and xcb.
+#include <pthread.h>
+#include <xcb/xcb.h>
+#include <xcb/xcb_ewmh.h>
+#include <xcb/xcb_icccm.h>
+#define class class_
+#include <wlr/xwayland/xwayland.h>
+#undef class
 #include <xkbcommon/xkbcommon.h>
 #undef static
+
+    // clang-format on
 }
