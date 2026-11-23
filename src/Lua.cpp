@@ -225,7 +225,7 @@ setField(lua_State *L, const Group *g, const char *key, int val)
         {
             expectType(L, val, LUA_TSTRING, key, "a string");
             const char *s = lua_tostring(L, val);
-            for (int i = 0; i < f->enum_names->size(); i++)
+            for (int i = 0; i < (int)f->enum_names->size(); i++)
                 if (std::strcmp(s, f->enum_names->at(i).c_str()) == 0)
                 {
                     *static_cast<int *>(f->ptr) = i;
@@ -496,27 +496,6 @@ luaSpawn(lua_State *L)
 {
     wmFrom(L)->spawn(luaL_checkstring(L, 1));
     return 0;
-}
-
-int
-luaNewClientPosition(lua_State *L)
-{
-    const char *s = luaL_checkstring(L, 1);
-    if (std::strcmp(s, "after_current") == 0)
-        lua_pushinteger(L, static_cast<int>(NewClientPosition::AfterCurrent));
-    else if (std::strcmp(s, "before_current") == 0)
-        lua_pushinteger(L, static_cast<int>(NewClientPosition::BeforeCurrent));
-    else if (std::strcmp(s, "top") == 0)
-        lua_pushinteger(L, static_cast<int>(NewClientPosition::Top));
-    else if (std::strcmp(s, "bottom") == 0)
-        lua_pushinteger(L, static_cast<int>(NewClientPosition::Bottom));
-    else
-        return luaL_error(L,
-                          "invalid new_client_position '%s' (expected "
-                          "'after_current', 'before_current', 'top' or "
-                          "'bottom')",
-                          s);
-    return 1;
 }
 
 // clang-format off

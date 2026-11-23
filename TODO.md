@@ -55,9 +55,8 @@ Tiling Wayland compositor in C++ on wlroots (CMake).
 - [x] xdg-output and output management (wlr-randr, kanshi)
 - [x] Screen capture (screencopy / ext-image-copy-capture) and xdg-desktop-portal-wlr
 - [x] primary-selection and data-control (clipboard managers)
-- [ ] Window capture of windows on hidden workspaces (their scene node is disabled, so the frame is blank)
-- [ ] Test capture end to end: `grim`, then a browser share through the portal
 - [x] Disabling an output with kanshi moves its windows and focus to another output
+- [ ] Window capture of windows on hidden workspaces (their scene node is disabled, so the frame is blank)
 - [ ] Session lock (swaylock), idle-notify, idle-inhibit
 - [ ] xdg-activation, pointer-constraints (games), fractional-scale + viewporter
 - [ ] XWayland (`wlr_xwayland`) for X11 apps
