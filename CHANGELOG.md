@@ -22,6 +22,12 @@
 - Move a window with `Super` and left drag. Resize it with `Super` and right drag.
 - A window dragged to another monitor moves to that monitor's workspace.
 - Popups such as menus and tooltips.
+- Closing a window focuses the one used before it, per workspace.
+- A window sent to a hidden workspace leaves the keyboard on the old one.
+- XWayland: X11 apps run, are tiled like other windows, and use the same
+  floating and fullscreen rules. Xwayland starts on first use and `DISPLAY` is
+  set for programs you spawn.
+- X11 menus and tooltips place themselves. Menus that need it get the keyboard.
 
 ### Multi-monitor
 - Independent outputs, each with its own workspaces and usable area.
@@ -41,6 +47,10 @@
   This covers screencopy and ext-image-copy-capture.
 - Clipboard: primary selection and data control.
 - Cursor shape and client-set cursors.
+- Session lock (`ext-session-lock-v1`), for lockers such as `swaylock`.
+  Every monitor is covered at once. Keybindings, focus and the pointer are
+  blocked. If the locker dies, the session stays locked.
+- Pointer events reach layer-shell surfaces such as bars.
 
 ### Input
 - Keyboard layout, variant, options and repeat settings.
@@ -51,6 +61,8 @@
 - `mu` global table with `mu.opts` and functions such as `mu.keybind`,
   `mu.spawn`, `mu.reload`, focus, swap, close and quit.
 - Workspace functions, `toggle_fullscreen` and `toggle_floating`.
+- `mu.opts.new_client_position` sets where new windows go:
+  `after_current`, `before_current`, `top` or `bottom`.
 - String colors such as `"#rrggbb"`.
 - Option changes take effect immediately.
 - Config reload clears duplicate bindings. A failing config falls back to the
