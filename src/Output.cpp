@@ -16,6 +16,7 @@ Output::onDestroy(void *)
 {
     wm->closeLayerSurfacesOn(output);
     wm->removeOutput(this);
+    wm->publishOutputConfig(); // this output is no longer in m_outputs
     for (Workspace *ws : workspaces)
     {
         if (ws->sceneTree)

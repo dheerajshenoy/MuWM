@@ -31,6 +31,8 @@ MuWM::~MuWM()
     m_newInput.unbind();
     m_newDecoration.unbind();
     m_layoutChange.unbind();
+    m_outputApply.unbind();
+    m_outputTest.unbind();
     // wlroots asserts that a cursor has no listeners left when destroyed
     m_cursorMotion.unbind();
     m_cursorMotionAbs.unbind();
@@ -203,6 +205,13 @@ MuWM::init()
     m_newLayerShellSurface.bind<&MuWM::onNewLayerShellSurface>(
         &m_layerShell->events.new_surface, this);
 
+    // kanshi and wlr-randr configure outputs through this protocol
+    m_outputManager = wlr_output_manager_v1_create(m_display);
+    m_outputApply.bind<&MuWM::onOutputManagerApply>(
+        &m_outputManager->events.apply, this);
+    m_outputTest.bind<&MuWM::onOutputManagerTest>(
+        &m_outputManager->events.test, this);
+
     return true;
 }
 
@@ -261,8 +270,86 @@ MuWM::handleNewOutput(wlr_output *output)
 
     arrangeLayers(output);
     arrange(o->workspace);
+    publishOutputConfig();
 
     wlr_log(WLR_INFO, "New output: %s", output->name);
+}
+
+void
+MuWM::publishOutputConfig()
+{
+    if (!m_outputManager)
+        return;
+
+    wlr_output_configuration_v1 *config = wlr_output_configuration_v1_create();
+    for (Output *o : m_outputs)
+    {
+        auto *head = wlr_output_configuration_head_v1_create(config, o->output);
+        if (auto *lo = wlr_output_layout_get(m_layout, o->output))
+        {
+            head->state.x = lo->x;
+            head->state.y = lo->y;
+        }
+    }
+    wlr_output_manager_v1_set_configuration(m_outputManager, config);
+}
+
+bool
+MuWM::applyOutputConfig(wlr_output_configuration_v1 *config, bool test)
+{
+    size_t n = 0;
+    wlr_backend_output_state *states
+        = wlr_output_configuration_v1_build_state(config, &n);
+    if (!states)
+        return false;
+
+    bool ok = test ? wlr_backend_test(m_backend, states, n)
+                   : wlr_backend_commit(m_backend, states, n);
+
+    for (size_t i = 0; i < n; i++)
+        wlr_output_state_finish(&states[i].base);
+    free(states);
+
+    if (!ok || test)
+        return ok;
+
+    // The backend doesn't know about positions; they live in the layout. The
+    // layout's change event re-arranges the windows.
+    wlr_output_configuration_head_v1 *head;
+    wl_list_for_each(head, &config->heads, link)
+    {
+        const wlr_output_head_v1_state &s = head->state;
+        if (s.enabled)
+            wlr_output_layout_add(m_layout, s.output, s.x, s.y);
+        else
+            wlr_output_layout_remove(m_layout, s.output);
+    }
+    return true;
+}
+
+void
+MuWM::onOutputManagerApply(void *data)
+{
+    auto *config = static_cast<wlr_output_configuration_v1 *>(data);
+    if (applyOutputConfig(config, false))
+        wlr_output_configuration_v1_send_succeeded(config);
+    else
+        wlr_output_configuration_v1_send_failed(config);
+    wlr_output_configuration_v1_destroy(config);
+
+    arrange();
+    publishOutputConfig(); // after a failed apply this resyncs the clients
+}
+
+void
+MuWM::onOutputManagerTest(void *data)
+{
+    auto *config = static_cast<wlr_output_configuration_v1 *>(data);
+    if (applyOutputConfig(config, true))
+        wlr_output_configuration_v1_send_succeeded(config);
+    else
+        wlr_output_configuration_v1_send_failed(config);
+    wlr_output_configuration_v1_destroy(config);
 }
 
 bool
@@ -780,7 +867,7 @@ MuWM::processMotion(uint32_t timeMsec)
         }
         else
         {
-            b.width  = std::max(
+            b.width = std::max(
                 100, m_grabBox.width + static_cast<int>(m_cursor->x - m_grabX));
             b.height = std::max(
                 60, m_grabBox.height + static_cast<int>(m_cursor->y - m_grabY));
@@ -891,6 +978,7 @@ void
 MuWM::onLayoutChange(void *)
 {
     arrange();
+    publishOutputConfig();
 }
 
 void
@@ -1432,8 +1520,8 @@ MuWM::setFloating(Toplevel *t, bool floating)
             h = 600;
         }
     }
-    t->floatBox = {area.x + (area.width - w) / 2,
-                   area.y + (area.height - h) / 2, w, h};
+    t->floatBox
+        = {area.x + (area.width - w) / 2, area.y + (area.height - h) / 2, w, h};
 }
 
 void
@@ -1474,8 +1562,8 @@ MuWM::beginGrab(Toplevel *t, bool resize)
     m_grabBox = t->floatBox;
     m_grab    = resize ? Grab::Resize : Grab::Move;
     // Move: offset of the cursor inside the window. Resize: the start point.
-    m_grabX = resize ? m_cursor->x : m_cursor->x - t->floatBox.x;
-    m_grabY = resize ? m_cursor->y : m_cursor->y - t->floatBox.y;
+    m_grabX   = resize ? m_cursor->x : m_cursor->x - t->floatBox.x;
+    m_grabY   = resize ? m_cursor->y : m_cursor->y - t->floatBox.y;
 }
 
 void

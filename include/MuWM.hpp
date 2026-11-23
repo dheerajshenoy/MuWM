@@ -44,6 +44,7 @@ public:
     void arrange();
     void arrange(Workspace *workspace);
     void removeOutput(Output *output);
+    void publishOutputConfig(); // tell wlr-output-management clients (kanshi)
     void loadConfig();
     void quit();
 
@@ -132,6 +133,9 @@ private:
     void onLayoutChange(void *data);
     void onNewDecoration(void *data);
     void onNewLayerShellSurface(void *data);
+    void onOutputManagerApply(void *data);
+    void onOutputManagerTest(void *data);
+    bool applyOutputConfig(wlr_output_configuration_v1 *config, bool test);
 
     void initLua();
     void initLuaBindings();
@@ -163,6 +167,7 @@ private:
     wlr_xcursor_manager *m_xcursor               = nullptr;
     wlr_xdg_decoration_manager_v1 *m_decoManager = nullptr;
     wlr_layer_shell_v1 *m_layerShell             = nullptr;
+    wlr_output_manager_v1 *m_outputManager       = nullptr;
     Output *m_focusedOutput                      = nullptr;
     std::vector<Output *> m_outputs;
     std::vector<Keyboard *> m_keyboards;
@@ -181,6 +186,8 @@ private:
     Listener<MuWM> m_newLayerShellSurface;
     Listener<MuWM> m_layoutChange;
     Listener<MuWM> m_newDecoration;
+    Listener<MuWM> m_outputApply;
+    Listener<MuWM> m_outputTest;
 
     // Super+drag: left button moves a window, right button resizes it.
     enum class Grab
@@ -189,11 +196,11 @@ private:
         Move,
         Resize
     };
-    Grab m_grab            = Grab::None;
-    Toplevel *m_grabbed    = nullptr;
-    double m_grabX         = 0; // cursor offset (move) or start point (resize)
-    double m_grabY         = 0;
-    wlr_box m_grabBox      = {}; // floatBox when the grab started
+    Grab m_grab         = Grab::None;
+    Toplevel *m_grabbed = nullptr;
+    double m_grabX      = 0; // cursor offset (move) or start point (resize)
+    double m_grabY      = 0;
+    wlr_box m_grabBox   = {}; // floatBox when the grab started
 
     Config m_config;
     std::vector<LayerShellSurface *> m_layerSurfaces;
