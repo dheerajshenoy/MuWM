@@ -15,6 +15,7 @@
 class MuWM;
 struct LayerShellSurface;
 struct LockSurface;
+struct XUnmanaged;
 struct Keyboard;
 struct Pointer;
 
@@ -100,10 +101,16 @@ public:
     void releaseLayerFocus(LayerShellSurface *s);
     void removeLayerShellSurface(LayerShellSurface *s);
     void closeLayerSurfacesOn(wlr_output *output);
+    wlr_scene_tree *windowTree() const
+    {
+        return m_windowTree;
+    }
     bool locked() const
     {
         return m_locked;
     }
+    void focusUnmanaged(XUnmanaged *u);
+    void releaseUnmanagedFocus(XUnmanaged *u);
     void lockSurfaceMapped(LockSurface *s);
     void lockSurfaceDestroyed(LockSurface *s);
     bool handleKeybinding(uint32_t mods, xkb_keysym_t sym);
@@ -159,6 +166,8 @@ private:
     void onRequestSetSelection(void *data);
     void onRequestSetPrimarySelection(void *data);
     void onNewLock(void *data);
+    void onXwaylandReady(void *data);
+    void onNewXWaylandSurface(void *data);
     void onLockNewSurface(void *data);
     void onLockUnlock(void *data);
     void onLockDestroy(void *data);
@@ -191,6 +200,8 @@ private:
     wl_display *m_display                             = nullptr;
     wlr_backend *m_backend                            = nullptr;
     wlr_renderer *m_renderer                          = nullptr;
+    wlr_compositor *m_compositor                          = nullptr;
+    wlr_xwayland *m_xwayland                            = nullptr;
     wlr_allocator *m_allocator                        = nullptr;
     wlr_scene *m_scene                                = nullptr;
     wlr_output_layout *m_layout                       = nullptr;
@@ -236,6 +247,8 @@ private:
     Listener<MuWM> m_requestSetPrimary;
     Listener<MuWM> m_newPopup;
     Listener<MuWM> m_newLock;
+    Listener<MuWM> m_xwaylandReady;
+    Listener<MuWM> m_xwaylandNewSurface;
     Listener<MuWM> m_lockNewSurface;
     Listener<MuWM> m_lockUnlock;
     Listener<MuWM> m_lockDestroy;
@@ -255,6 +268,8 @@ private:
 
     Config m_config;
     std::vector<LayerShellSurface *> m_layerSurfaces;
+    // An X11 menu that asked for the keyboard; it keeps it until it closes.
+    XUnmanaged *m_focusedUnmanaged = nullptr;
     LayerShellSurface *m_focusedLayer = nullptr; // holds the keyboard, if any
 
     // Stacking order, bottom to top: background, bottom, windows, top, overlay.

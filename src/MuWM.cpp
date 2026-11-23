@@ -3,11 +3,12 @@
 #include "Decoration.hpp"
 #include "Keyboard.hpp"
 #include "LayerShellSurface.hpp"
+#include "LockSurface.hpp"
 #include "Output.hpp"
 #include "Pointer.hpp"
-#include "LockSurface.hpp"
 #include "Popup.hpp"
 #include "Toplevel.hpp"
+#include "XUnmanaged.hpp"
 
 #include <algorithm>
 #include <csignal>
@@ -36,6 +37,8 @@ MuWM::~MuWM()
     m_layoutChange.unbind();
     m_captureRequest.unbind();
     m_newLock.unbind();
+    m_xwaylandReady.unbind();
+    m_xwaylandNewSurface.unbind();
     m_lockNewSurface.unbind();
     m_lockUnlock.unbind();
     m_lockDestroy.unbind();
@@ -177,7 +180,7 @@ MuWM::init()
     m_lockTree = wlr_scene_tree_create(&m_scene->tree);
 
     // protocols creations
-    wlr_compositor_create(m_display, 5, m_renderer);
+    m_compositor = wlr_compositor_create(m_display, 5, m_renderer);
     wlr_subcompositor_create(m_display);
     wlr_xdg_output_manager_v1_create(m_display, m_layout); // bars need it
     wlr_data_device_manager_create(m_display);
@@ -255,6 +258,20 @@ MuWM::init()
         &m_outputManager->events.apply, this);
     m_outputTest.bind<&MuWM::onOutputManagerTest>(&m_outputManager->events.test,
                                                   this);
+
+    // Lazy: Xwayland only starts when the first X11 client connects.
+    m_xwayland = wlr_xwayland_create(m_display, m_compositor, true);
+    if (m_xwayland)
+    {
+        // The socket exists already, so programs we spawn can find it.
+        setenv("DISPLAY", m_xwayland->display_name, 1);
+        m_xwaylandReady.bind<&MuWM::onXwaylandReady>(&m_xwayland->events.ready,
+                                                     this);
+        m_xwaylandNewSurface.bind<&MuWM::onNewXWaylandSurface>(
+            &m_xwayland->events.new_surface, this);
+    }
+    else
+        wlr_log(WLR_ERROR, "Failed to create XWayland; X11 apps won't work");
 
     return true;
 }
@@ -515,9 +532,8 @@ MuWM::handleNewInput(wlr_input_device *device)
 
     Toplevel *t = focusedToplevel();
     if (t && !m_seat->keyboard_state.focused_surface)
-        wlr_seat_keyboard_notify_enter(m_seat, t->xdg->base->surface,
-                                       kb->keycodes, kb->num_keycodes,
-                                       &kb->modifiers);
+        wlr_seat_keyboard_notify_enter(m_seat, t->surface(), kb->keycodes,
+                                       kb->num_keycodes, &kb->modifiers);
 }
 
 void
@@ -703,7 +719,7 @@ MuWM::focusToplevel(Toplevel *t)
         return;
     if (oldFocus)
     {
-        wlr_xdg_toplevel_set_activated(oldFocus->xdg, false);
+        oldFocus->setActivated(false);
         oldFocus->setFocused(false);
     }
     if (!t)
@@ -730,15 +746,14 @@ MuWM::focusToplevel(Toplevel *t)
     wlr_scene_node_raise_to_top(&t->tree->node);
     if (!t->floating)
         raiseFloaters(ws); // a focused tile must not cover floating windows
-    if (m_focusedLayer || m_locked)
+    if (m_focusedLayer || m_focusedUnmanaged || m_locked)
         return; // the window is focused again when the layer surface lets go
 
     t->setFocused(true);
-    wlr_xdg_toplevel_set_activated(t->xdg, true);
+    t->setActivated(true);
     if (wlr_keyboard *kb = wlr_seat_get_keyboard(m_seat))
-        wlr_seat_keyboard_notify_enter(m_seat, t->xdg->base->surface,
-                                       kb->keycodes, kb->num_keycodes,
-                                       &kb->modifiers);
+        wlr_seat_keyboard_notify_enter(m_seat, t->surface(), kb->keycodes,
+                                       kb->num_keycodes, &kb->modifiers);
 }
 
 WindowInfo
@@ -746,10 +761,10 @@ MuWM::windowInfo(const Toplevel *t) const
 {
     WindowInfo info;
     info.id     = t->id;
-    info.title  = t->xdg->title ? t->xdg->title : "";
-    info.appId  = t->xdg->app_id ? t->xdg->app_id : "";
-    info.width  = t->xdg->base->surface->current.width;
-    info.height = t->xdg->base->surface->current.height;
+    info.title  = t->title();
+    info.appId  = t->appId();
+    info.width  = t->surface()->current.width;
+    info.height = t->surface()->current.height;
     if (const Workspace *ws = t->workspace)
     {
         info.workspace = ws->name;
@@ -891,7 +906,7 @@ MuWM::arrange(Workspace *ws)
     auto place = [](Toplevel *t, int x, int y, int w, int h, bool borders)
     {
         wlr_scene_node_set_position(&t->tree->node, x, y);
-        wlr_xdg_toplevel_set_size(t->xdg, w, h);
+        t->setSize(w, h);
         t->setBordersVisible(borders);
         if (borders)
             t->resizeBorders(w, h);
@@ -1030,9 +1045,11 @@ MuWM::processMotion(uint32_t timeMsec)
 
     wlr_surface *surface = nullptr;
     double sx = 0, sy = 0;
-    Toplevel *t = toplevelAt(m_cursor->x, m_cursor->y, &surface, &sx, &sy);
+    toplevelAt(m_cursor->x, m_cursor->y, &surface, &sx, &sy);
 
-    if (!t)
+    // Judge by the surface, not the window: X11 menus and layer-shell surfaces
+    // have a surface under the pointer but no Toplevel.
+    if (!surface)
     {
         wlr_cursor_set_xcursor(m_cursor, m_xcursor, "default");
         wlr_seat_pointer_clear_focus(m_seat);
@@ -1236,7 +1253,7 @@ MuWM::focusLayerSurface(LayerShellSurface *s)
 
     if (Toplevel *t = focusedToplevel())
     {
-        wlr_xdg_toplevel_set_activated(t->xdg, false);
+        t->setActivated(false);
         t->setFocused(false);
     }
     m_focusedLayer = s;
@@ -1260,11 +1277,10 @@ MuWM::releaseLayerFocus(LayerShellSurface *s)
     if (Toplevel *t = focusedToplevel())
     {
         t->setFocused(true);
-        wlr_xdg_toplevel_set_activated(t->xdg, true);
+        t->setActivated(true);
         if (wlr_keyboard *kb = wlr_seat_get_keyboard(m_seat))
-            wlr_seat_keyboard_notify_enter(m_seat, t->xdg->base->surface,
-                                           kb->keycodes, kb->num_keycodes,
-                                           &kb->modifiers);
+            wlr_seat_keyboard_notify_enter(m_seat, t->surface(), kb->keycodes,
+                                           kb->num_keycodes, &kb->modifiers);
         wlr_log(WLR_INFO, "Keyboard focus: back to the window");
     }
     else
@@ -1492,7 +1508,7 @@ void
 MuWM::close()
 {
     if (Toplevel *t = focusedToplevel())
-        wlr_xdg_toplevel_send_close(t->xdg);
+        t->close();
 }
 
 void
@@ -1601,7 +1617,7 @@ MuWM::switchWorkspace(Output *out, Workspace *ws_target)
     // Deactivate the old window while it is still that workspace's focus.
     if (Toplevel *old = ws_old->focusedToplevel)
     {
-        wlr_xdg_toplevel_set_activated(old->xdg, false);
+        old->setActivated(false);
         old->setFocused(false);
     }
 
@@ -1670,7 +1686,7 @@ MuWM::toplevelToWorkspace(Toplevel *toplevel, Workspace *ws_target)
     std::erase(ws_target->focusHistory, toplevel);
     ws_target->focusHistory.push_back(toplevel);
     ws_target->focusedToplevel = toplevel;
-    wlr_xdg_toplevel_set_activated(toplevel->xdg, false);
+    toplevel->setActivated(false);
     toplevel->setFocused(false);
 
     if (ws_old == currentWorkspace())
@@ -1698,9 +1714,7 @@ MuWM::setFullscreen(Toplevel *toplevel, bool fullscreen)
         return;
 
     toplevel->fullscreen = fullscreen;
-    // Before the first commit the state is sent with the initial configure.
-    if (toplevel->xdg->base->initialized)
-        wlr_xdg_toplevel_set_fullscreen(toplevel->xdg, fullscreen);
+    toplevel->setFullscreen(fullscreen); // tells the client (once initialized)
 
     Workspace *ws = toplevel->workspace;
     if (!ws)
@@ -1745,12 +1759,12 @@ MuWM::setFloating(Toplevel *t, bool floating)
 
     Workspace *ws = t->workspace ? t->workspace : currentWorkspace();
     wlr_box area  = ws && ws->output ? ws->output->usableArea : wlr_box{};
-    wlr_box geo   = t->xdg->base->geometry;
+    wlr_box geo   = t->geometry();
 
     // Dialogs keep the size they asked for; a toggled tile gets 60% of the
     // output. Either way the window is centered.
     int w = geo.width, h = geo.height;
-    if (!t->xdg->parent || w <= 0 || h <= 0)
+    if (!t->isDialog() || w <= 0 || h <= 0)
     {
         if (area.width > 0)
         {
@@ -1772,7 +1786,7 @@ MuWM::placeFloating(Toplevel *t)
 {
     const wlr_box &b = t->floatBox;
     wlr_scene_node_set_position(&t->tree->node, b.x, b.y);
-    wlr_xdg_toplevel_set_size(t->xdg, b.width, b.height);
+    t->setSize(b.width, b.height);
     t->setBordersVisible(true);
     t->resizeBorders(b.width, b.height);
 }
@@ -1795,7 +1809,7 @@ MuWM::beginGrab(Toplevel *t, bool resize)
     {
         // Pull the tile out of the layout, keeping it where it is.
         setFloating(t, true);
-        wlr_box geo = t->xdg->base->geometry;
+        wlr_box geo = t->geometry();
         t->floatBox = {t->tree->node.x, t->tree->node.y, geo.width, geo.height};
         arrange(t->workspace);
     }
@@ -1951,10 +1965,11 @@ MuWM::startLock()
 
     if (Toplevel *t = focusedToplevel())
     {
-        wlr_xdg_toplevel_set_activated(t->xdg, false);
+        t->setActivated(false);
         t->setFocused(false);
     }
-    m_focusedLayer = nullptr; // a launcher must not keep the keyboard
+    m_focusedLayer     = nullptr; // a launcher must not keep the keyboard
+    m_focusedUnmanaged = nullptr; // nor an X11 menu
     wlr_seat_keyboard_notify_clear_focus(m_seat);
     wlr_seat_pointer_notify_clear_focus(m_seat);
 
@@ -1974,8 +1989,8 @@ MuWM::createLockCover(Output *o)
     const float black[4] = {0.0f, 0.0f, 0.0f, 1.0f}; // opaque
     wlr_box box;
     wlr_output_layout_get_box(m_layout, o->output, &box);
-    o->lockCover = wlr_scene_rect_create(m_lockTree, box.width, box.height,
-                                         black);
+    o->lockCover
+        = wlr_scene_rect_create(m_lockTree, box.width, box.height, black);
     wlr_scene_node_set_position(&o->lockCover->node, box.x, box.y);
 }
 
@@ -2004,8 +2019,8 @@ MuWM::layoutLock()
         wlr_box box;
         wlr_output_layout_get_box(m_layout, out, &box);
         wlr_scene_node_set_position(&ls->tree->node, box.x, box.y);
-        if (box.width > 0 && (box.width != ls->configuredW
-                              || box.height != ls->configuredH))
+        if (box.width > 0
+            && (box.width != ls->configuredW || box.height != ls->configuredH))
         {
             wlr_session_lock_surface_v1_configure(ls->surface, box.width,
                                                   box.height);
@@ -2087,7 +2102,8 @@ MuWM::checkLockReady()
             continue; // disabled outputs are not shown to the locker
         bool covered = false;
         for (LockSurface *ls : m_lockSurfaces)
-            if (ls->surface->output == o->output && ls->surface->surface->mapped)
+            if (ls->surface->output == o->output
+                && ls->surface->surface->mapped)
             {
                 covered = true;
                 break;
@@ -2147,19 +2163,118 @@ MuWM::restoreKeyboardFocus()
 
     if (m_focusedLayer && kb)
     {
-        wlr_seat_keyboard_notify_enter(m_seat, m_focusedLayer->layerSurface->surface,
-                                       kb->keycodes, kb->num_keycodes,
-                                       &kb->modifiers);
+        wlr_seat_keyboard_notify_enter(
+            m_seat, m_focusedLayer->layerSurface->surface, kb->keycodes,
+            kb->num_keycodes, &kb->modifiers);
         return;
     }
     if (Toplevel *t = focusedToplevel(); t && kb)
     {
         t->setFocused(true);
-        wlr_xdg_toplevel_set_activated(t->xdg, true);
-        wlr_seat_keyboard_notify_enter(m_seat, t->xdg->base->surface,
-                                       kb->keycodes, kb->num_keycodes,
-                                       &kb->modifiers);
+        t->setActivated(true);
+        wlr_seat_keyboard_notify_enter(m_seat, t->surface(), kb->keycodes,
+                                       kb->num_keycodes, &kb->modifiers);
         return;
     }
     wlr_seat_keyboard_notify_clear_focus(m_seat);
+}
+
+// --- XWayland --------------------------------------------------------------
+
+// Xwayland has started (on the first X11 client) and the X window manager is
+// running, so the seat and the cursor can be handed to it.
+void
+MuWM::onXwaylandReady(void *)
+{
+    wlr_log(WLR_INFO, "XWayland ready on DISPLAY=%s", m_xwayland->display_name);
+
+    // Keyboard focus and the clipboard for X11 windows.
+    wlr_xwayland_set_seat(m_xwayland, m_seat);
+
+    // The cursor X11 windows show where they don't set their own.
+    if (wlr_xcursor *cursor
+        = wlr_xcursor_manager_get_xcursor(m_xcursor, "default", 1))
+    {
+        wlr_xcursor_image *image = cursor->images[0];
+        if (wlr_buffer *buffer = wlr_xcursor_image_get_buffer(image))
+            wlr_xwayland_set_cursor(m_xwayland, buffer, image->hotspot_x,
+                                    image->hotspot_y);
+    }
+}
+
+// A new X11 window. Menus and tooltips (override-redirect) place themselves;
+// everything else is a normal window that gets tiled like an xdg toplevel.
+void
+MuWM::onNewXWaylandSurface(void *data)
+{
+    auto *xs = static_cast<wlr_xwayland_surface *>(data);
+
+    if (xs->override_redirect)
+    {
+        auto *u = new XUnmanaged{this, xs};
+        u->associate.bind<&XUnmanaged::onAssociate>(&xs->events.associate, u);
+        u->dissociate.bind<&XUnmanaged::onDissociate>(&xs->events.dissociate,
+                                                      u);
+        u->destroy.bind<&XUnmanaged::onDestroy>(&xs->events.destroy, u);
+        u->requestConfigure.bind<&XUnmanaged::onRequestConfigure>(
+            &xs->events.request_configure, u);
+        u->setGeometry.bind<&XUnmanaged::onSetGeometry>(
+            &xs->events.set_geometry, u);
+        if (xs->surface)
+            u->onAssociate(nullptr);
+        return;
+    }
+
+    auto *t = new Toplevel{this, nullptr, xs};
+    t->tree = wlr_scene_tree_create(m_windowTree);
+    t->id   = m_globalTopLevelId++;
+
+    for (auto &r : t->border)
+        r = wlr_scene_rect_create(t->tree, 1, 1,
+                                  m_config.border.unfocused_color);
+
+    t->tree->node.data = t;
+    t->associate.bind<&Toplevel::onAssociate>(&xs->events.associate, t);
+    t->dissociate.bind<&Toplevel::onDissociate>(&xs->events.dissociate, t);
+    t->destroy.bind<&Toplevel::onDestroy>(&xs->events.destroy, t);
+    t->requestFullscreen.bind<&Toplevel::onRequestFullscreen>(
+        &xs->events.request_fullscreen, t);
+    t->requestConfigure.bind<&Toplevel::onRequestConfigure>(
+        &xs->events.request_configure, t);
+    t->setTitle.bind<&Toplevel::onSetTitle>(&xs->events.set_title, t);
+    t->setAppId.bind<&Toplevel::onSetAppId>(&xs->events.set_class, t);
+
+    if (xs->surface)
+        t->onAssociate(nullptr); // it already has a surface
+}
+
+// An X11 menu that wants the keyboard (arrow keys, type to search) gets it
+// while it is open. The window underneath stays "focused" and keeps its
+// activated state, so its title doesn't flicker; it gets the keyboard back
+// when the menu closes.
+void
+MuWM::focusUnmanaged(XUnmanaged *u)
+{
+    if (m_locked || m_focusedUnmanaged == u)
+        return;
+    m_focusedUnmanaged = u;
+
+    wlr_xwayland_surface_activate(u->xsurface, true);
+    if (wlr_keyboard *kb = wlr_seat_get_keyboard(m_seat))
+        wlr_seat_keyboard_notify_enter(m_seat, u->xsurface->surface,
+                                       kb->keycodes, kb->num_keycodes,
+                                       &kb->modifiers);
+}
+
+void
+MuWM::releaseUnmanagedFocus(XUnmanaged *u)
+{
+    if (m_focusedUnmanaged != u)
+        return;
+    m_focusedUnmanaged = nullptr;
+
+    if (u->xsurface->surface) // still alive: it is closing, not being freed
+        wlr_xwayland_surface_activate(u->xsurface, false);
+    if (!m_locked)
+        restoreKeyboardFocus(); // layer surface, window, or nothing
 }

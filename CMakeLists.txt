@@ -24,6 +24,8 @@ find_package(Lua REQUIRED)
 
 pkg_check_modules(WAYLAND_PROTOCOLS REQUIRED wayland-protocols)
 pkg_get_variable(WAYLAND_PROTOCOLS_DIR wayland-protocols pkgdatadir)
+pkg_check_modules(XCB REQUIRED xcb)
+pkg_check_modules(XCB_ICCCM REQUIRED xcb-icccm)
 
 find_program(WAYLAND_SCANNER wayland-scanner REQUIRED)
 
@@ -69,6 +71,7 @@ add_executable(${PROJECT_NAME}
     src/Logging.cpp
     src/Popup.cpp
     src/LockSurface.cpp
+    src/XUnmanaged.cpp
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE
@@ -80,6 +83,8 @@ target_include_directories(${PROJECT_NAME} PRIVATE
 target_link_libraries(${PROJECT_NAME} PRIVATE
     PkgConfig::DEPS
     ${LUA_LIBRARIES}
+    xcb
+    xcb-icccm
     muwm_protocols
 )
 
