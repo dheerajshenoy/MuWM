@@ -23,7 +23,9 @@ Tiling Wayland compositor in C++ on wlroots (CMake).
 - [x] Verify output resize re-tiles (`request_state` + layout `change`)
 - [x] Clean shutdown on SIGINT / SIGTERM (destroy listeners, `wl_display_destroy_clients`)
 - [ ] xdg popups (menus, tooltips). Without them, right-click menus won't show
-- [ ] Floating windows for dialogs (toplevels with a parent) and fullscreen requests
+- [x] Fullscreen (client requests and `toggle_fullscreen`)
+- [x] Floating windows: `toggle_floating`, auto-float for dialogs and fixed-size windows, Super+drag move / resize
+- [ ] Floating: honour client `request_move` / `request_resize`, and re-center on output change
 - [ ] Client cursor shape (`request_set_cursor`, cursor-shape-v1)
 
 ## Configuration (Lua)
@@ -35,7 +37,7 @@ Tiling Wayland compositor in C++ on wlroots (CMake).
 - [x] Replace the hardcoded Alt+Q / Alt+Return with config bindings
 - [x] Reload keybinding (reset `m_config`, rerun config, `arrange()`)
 - [x] Keyboard layout, xkb options and repeat rate as config options
-- [ ] LuaLS annotation stub for editor completion
+- [x] LuaLS annotation stub for editor completion
 
 ## Layout and windows
 
@@ -51,7 +53,10 @@ Tiling Wayland compositor in C++ on wlroots (CMake).
 
 - [x] wlr-layer-shell (bars, launchers such as waybar, fuzzel)
 - [x] xdg-output and output management (wlr-randr, kanshi)
-- [ ] Screen capture (screencopy / ext-image-copy-capture) and xdg-desktop-portal-wlr
+- [x] Screen capture (screencopy / ext-image-copy-capture) and xdg-desktop-portal-wlr
+- [ ] Window capture of windows on hidden workspaces (their scene node is disabled, so the frame is blank)
+- [ ] Test capture end to end: `grim`, then a browser share through the portal
+- [ ] Disabling an output with kanshi should move its windows to another output
 - [ ] Session lock (swaylock), idle-notify, idle-inhibit
 - [ ] primary-selection and data-control (clipboard managers)
 - [ ] xdg-activation, pointer-constraints (games), fractional-scale + viewporter
