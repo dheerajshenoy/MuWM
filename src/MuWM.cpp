@@ -44,6 +44,8 @@ MuWM::~MuWM()
     m_cursorFrame.unbind();
     m_requestSetSelection.unbind();
     m_requestSetPrimary.unbind();
+    m_cursorShape.unbind();
+    m_requestSetCursor.unbind();
 
     if (m_outputListener.listener.link.prev)
         wl_list_remove(&m_outputListener.listener.link);
@@ -178,6 +180,7 @@ MuWM::init()
     wlr_primary_selection_v1_device_manager_create(m_display);
     wlr_ext_data_control_manager_v1_create(m_display, 1);
     wlr_data_control_manager_v1_create(m_display);
+
     m_cursorShapeManager = wlr_cursor_shape_manager_v1_create(m_display, 1);
     m_cursorShape.bind<&MuWM::onCursorShape>(
         &m_cursorShapeManager->events.request_set_shape, this);
@@ -200,6 +203,7 @@ MuWM::init()
     wlr_seat_set_capabilities(m_seat, WL_SEAT_CAPABILITY_POINTER
                                           | WL_SEAT_CAPABILITY_KEYBOARD
                                           | WL_SEAT_CAPABILITY_TOUCH);
+
     m_cursor = wlr_cursor_create();
     wlr_cursor_attach_output_layout(m_cursor, m_layout);
     m_xcursor = wlr_xcursor_manager_create(nullptr, 24);
@@ -211,6 +215,8 @@ MuWM::init()
     m_cursorAxis.bind<&MuWM::onCursorAxis>(&m_cursor->events.axis, this);
     m_cursorFrame.bind<&MuWM::onCursorFrame>(&m_cursor->events.frame, this);
     m_newInput.bind<&MuWM::onNewInput>(&m_backend->events.new_input, this);
+    m_requestSetCursor.bind<&MuWM::onRequestSetCursor>(
+        &m_seat->events.request_set_cursor, this);
     m_requestSetSelection.bind<&MuWM::onRequestSetSelection>(
         &m_seat->events.request_set_selection, this);
     m_requestSetPrimary.bind<&MuWM::onRequestSetPrimarySelection>(
@@ -1749,4 +1755,17 @@ MuWM::onCursorShape(void *data)
         wlr_cursor_set_xcursor(m_cursor, m_xcursor,
                                wlr_cursor_shape_v1_name(ev->shape));
     }
+}
+
+void
+MuWM::onRequestSetCursor(void *data)
+{
+    auto *ev = static_cast<wlr_seat_pointer_request_set_cursor_event *>(data);
+
+    // Only the client the pointer is over may change the cursor.
+    if (ev->seat_client != m_seat->pointer_state.focused_client)
+        return;
+
+    // A null surface hides the cursor.
+    wlr_cursor_set_surface(m_cursor, ev->surface, ev->hotspot_x, ev->hotspot_y);
 }

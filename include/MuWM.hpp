@@ -143,6 +143,7 @@ private:
     void onNewDecoration(void *data);
     void onNewLayerShellSurface(void *data);
     void onCursorShape(void *data);
+    void onRequestSetCursor(void *data);
     void onToplevelCaptureRequest(void *data);
     void onOutputManagerApply(void *data);
     void onOutputManagerTest(void *data);
@@ -202,6 +203,7 @@ private:
     Listener<MuWM> m_cursorAxis;
     Listener<MuWM> m_cursorFrame;
     Listener<MuWM> m_cursorShape;
+    Listener<MuWM> m_requestSetCursor;
     Listener<MuWM> m_newInput;
     Listener<MuWM> m_newToplevel;
     Listener<MuWM> m_newLayerShellSurface;
