@@ -4,8 +4,18 @@
 
 #include <string>
 
+enum class NewClientPosition
+{
+    AfterCurrent = 0,
+    BeforeCurrent,
+    Top,
+    Bottom,
+};
+
 struct Config
 {
+    NewClientPosition new_client_position = NewClientPosition::AfterCurrent;
+
     struct Gaps
     {
         int value  = 10;

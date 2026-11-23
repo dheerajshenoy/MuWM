@@ -21,6 +21,7 @@ struct Field
     enum Kind
     {
         String,
+        Enum,
         Bool,
         Float,
         Int,
@@ -34,6 +35,7 @@ struct Field
     int changes      = 0; // MuWM::Change flags to apply after a write
     int min          = INT_MIN;
     int max          = INT_MAX;
+    const std::vector<std::string> *enum_names = nullptr; // for Kind::Enum
 };
 
 struct Group
@@ -52,6 +54,14 @@ intField(const char *name, int *p, int min = INT_MIN, int max = INT_MAX,
          int changes = 0)
 {
     return {Field::Int, name, p, nullptr, changes, min, max};
+}
+
+Field
+enumField(const char *name, void *p, const std::vector<std::string> *enum_names,
+          int changes = 0)
+{
+    return {Field::Enum, name,    p,       nullptr,
+            changes,     INT_MIN, INT_MAX, enum_names};
 }
 
 Field
@@ -211,6 +221,23 @@ setField(lua_State *L, const Group *g, const char *key, int val)
 
     switch (f->kind)
     {
+        case Field::Enum:
+        {
+            expectType(L, val, LUA_TSTRING, key, "a string");
+            const char *s = lua_tostring(L, val);
+            for (int i = 0; i < f->enum_names->size(); i++)
+                if (std::strcmp(s, f->enum_names->at(i).c_str()) == 0)
+                {
+                    *static_cast<int *>(f->ptr) = i;
+                    goto done;
+                }
+            luaL_error(L, "option '%s' expects one of:", key);
+            for (int i = 0; i < (int)f->enum_names->size(); i++)
+                luaL_error(L, "  %s", f->enum_names + i * 32);
+        done:
+            break;
+        }
+
         case Field::Float:
         {
             expectType(L, val, LUA_TNUMBER, key, "a number");
@@ -323,6 +350,11 @@ pushField(lua_State *L, const Field *f)
 {
     switch (f->kind)
     {
+        case Field::Enum:
+            lua_pushstring(
+                L, f->enum_names->at(*static_cast<int *>(f->ptr)).c_str());
+            break;
+
         case Field::Bool:
             lua_pushboolean(L, *static_cast<bool *>(f->ptr));
             break;
@@ -464,6 +496,27 @@ luaSpawn(lua_State *L)
 {
     wmFrom(L)->spawn(luaL_checkstring(L, 1));
     return 0;
+}
+
+int
+luaNewClientPosition(lua_State *L)
+{
+    const char *s = luaL_checkstring(L, 1);
+    if (std::strcmp(s, "after_current") == 0)
+        lua_pushinteger(L, static_cast<int>(NewClientPosition::AfterCurrent));
+    else if (std::strcmp(s, "before_current") == 0)
+        lua_pushinteger(L, static_cast<int>(NewClientPosition::BeforeCurrent));
+    else if (std::strcmp(s, "top") == 0)
+        lua_pushinteger(L, static_cast<int>(NewClientPosition::Top));
+    else if (std::strcmp(s, "bottom") == 0)
+        lua_pushinteger(L, static_cast<int>(NewClientPosition::Bottom));
+    else
+        return luaL_error(L,
+                          "invalid new_client_position '%s' (expected "
+                          "'after_current', 'before_current', 'top' or "
+                          "'bottom')",
+                          s);
+    return 1;
 }
 
 // clang-format off
@@ -680,6 +733,13 @@ luaOff(lua_State *L)
     return 1;
 }
 
+static const std::vector<std::string> kNewClientPositionNames = {
+    "after_current",
+    "before_current",
+    "top",
+    "bottom",
+};
+
 } // namespace
 
 void
@@ -825,22 +885,24 @@ MuWM::initLuaBindings()
     };
 
     // lua ---@class mu.opts
-    optsGroup.fields = {
-        // lua ---@field keyboard mu.opts.keyboard Keyboard layout options.
-        subField("keyboard", &keyboardGroup),
+    optsGroup.fields
+        = {// lua ---@field keyboard mu.opts.keyboard Keyboard layout options.
+           subField("keyboard", &keyboardGroup),
 
-        // lua ---@field touchpad mu.opts.touchpad Touchpad options.
-        subField("touchpad", &touchpadGroup),
+           // lua ---@field touchpad mu.opts.touchpad Touchpad options.
+           subField("touchpad", &touchpadGroup),
 
-        // lua ---@field gaps mu.opts.gaps Window gap options.
-        subField("gaps", &gapsGroup),
+           // lua ---@field gaps mu.opts.gaps Window gap options.
+           subField("gaps", &gapsGroup),
 
-        // lua ---@field border mu.opts.border Window border options.
-        subField("border", &borderGroup),
+           // lua ---@field border mu.opts.border Window border options.
+           subField("border", &borderGroup),
 
-        // lua ---@field layout mu.opts.layout Layout options.
-        subField("layout", &layoutGroup),
-    };
+           // lua ---@field layout mu.opts.layout Layout options.
+           subField("layout", &layoutGroup),
+
+           enumField("new_client_position", &m_config.new_client_position,
+                     &kNewClientPositionNames, MuWM::ChangeLayout)};
 
     // lua ---@class mu.opts.touchpad
     touchpadGroup.fields = {

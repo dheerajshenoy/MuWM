@@ -26,7 +26,7 @@ Tiling Wayland compositor in C++ on wlroots (CMake).
 - [x] Floating windows: `toggle_floating`, auto-float for dialogs and fixed-size windows, Super+drag move / resize
 - [x] xdg popups (menus, tooltips). Without them, right-click menus won't show
 - [x] Floating: honour client `request_move` / `request_resize`, and re-center on output change
-- [ ] Client cursor shape (`request_set_cursor`, cursor-shape-v1)
+- [x] Client cursor shape (`request_set_cursor`, cursor-shape-v1)
 
 ## Configuration (Lua)
 

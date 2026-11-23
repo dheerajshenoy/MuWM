@@ -749,8 +749,7 @@ MuWM::addToplevel(Toplevel *t)
     }
 
     auto &toplevels = t->workspace->toplevels;
-    if (std::find(toplevels.begin(), toplevels.end(), t) == toplevels.end())
-        toplevels.push_back(t);
+    insertNewTopLevel(toplevels, t);
 
     // A new window leaves any fullscreen window behind it, so lay out first.
     for (Toplevel *other : std::vector<Toplevel *>(toplevels))
@@ -762,6 +761,45 @@ MuWM::addToplevel(Toplevel *t)
 
     if (m_eventBus.hasHandlers(EventType::WindowOpen))
         m_eventBus.emit(EventType::WindowOpen, windowInfo(t));
+}
+
+void
+MuWM::insertNewTopLevel(std::vector<Toplevel *> &toplevels, Toplevel *t)
+{
+    NewClientPosition pos = m_config.new_client_position;
+
+    if (pos == NewClientPosition::Top)
+        toplevels.insert(toplevels.begin(), t);
+    else if (pos == NewClientPosition::Bottom)
+        toplevels.push_back(t);
+    else if (pos == NewClientPosition::AfterCurrent)
+    {
+        Toplevel *focused = focusedToplevel();
+        if (!focused || focused->workspace != t->workspace)
+            toplevels.push_back(t);
+        else
+        {
+            auto it = std::find(toplevels.begin(), toplevels.end(), focused);
+            toplevels.insert(it + 1, t);
+        }
+    }
+    else if (pos == NewClientPosition::BeforeCurrent)
+    {
+        Toplevel *focused = focusedToplevel();
+        if (!focused || focused->workspace != t->workspace)
+            toplevels.push_back(t);
+        else
+        {
+            auto it = std::find(toplevels.begin(), toplevels.end(), focused);
+            toplevels.insert(it, t);
+        }
+    }
+    else
+    {
+        wlr_log(WLR_ERROR, "Unknown new_client_position value %d",
+                static_cast<int>(pos));
+        toplevels.push_back(t);
+    }
 }
 
 void

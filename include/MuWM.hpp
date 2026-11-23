@@ -163,6 +163,7 @@ private:
     void raiseFloaters(Workspace *);
     void beginGrab(Toplevel *, bool resize);
     void endGrab();
+    void insertNewTopLevel(std::vector<Toplevel *> &toplevels, Toplevel *t);
 
 private:
     bool m_ok = false;
@@ -170,22 +171,22 @@ private:
     void installDefaultBindings();
     const argparse::ArgumentParser &m_parser;
 
-    wl_display *m_display                           = nullptr;
-    wlr_backend *m_backend                          = nullptr;
-    wlr_renderer *m_renderer                        = nullptr;
-    wlr_allocator *m_allocator                      = nullptr;
-    wlr_scene *m_scene                              = nullptr;
-    wlr_output_layout *m_layout                     = nullptr;
-    wlr_scene_output_layout *m_sceneLayout          = nullptr;
-    wlr_seat *m_seat                                = nullptr;
-    wlr_xdg_shell *m_xdgShell                       = nullptr;
-    wlr_cursor *m_cursor                            = nullptr;
-    wlr_xcursor_manager *m_xcursor                  = nullptr;
-    wlr_xdg_decoration_manager_v1 *m_decoManager    = nullptr;
-    wlr_layer_shell_v1 *m_layerShell                = nullptr;
-    wlr_output_manager_v1 *m_outputManager          = nullptr;
+    wl_display *m_display                             = nullptr;
+    wlr_backend *m_backend                            = nullptr;
+    wlr_renderer *m_renderer                          = nullptr;
+    wlr_allocator *m_allocator                        = nullptr;
+    wlr_scene *m_scene                                = nullptr;
+    wlr_output_layout *m_layout                       = nullptr;
+    wlr_scene_output_layout *m_sceneLayout            = nullptr;
+    wlr_seat *m_seat                                  = nullptr;
+    wlr_xdg_shell *m_xdgShell                         = nullptr;
+    wlr_cursor *m_cursor                              = nullptr;
+    wlr_xcursor_manager *m_xcursor                    = nullptr;
+    wlr_xdg_decoration_manager_v1 *m_decoManager      = nullptr;
+    wlr_layer_shell_v1 *m_layerShell                  = nullptr;
+    wlr_output_manager_v1 *m_outputManager            = nullptr;
     wlr_cursor_shape_manager_v1 *m_cursorShapeManager = nullptr;
-    wlr_ext_foreign_toplevel_list_v1 *m_foreignList = nullptr;
+    wlr_ext_foreign_toplevel_list_v1 *m_foreignList   = nullptr;
     wlr_ext_foreign_toplevel_image_capture_source_manager_v1
         *m_toplevelCaptureManager = nullptr;
     Output *m_focusedOutput       = nullptr;
