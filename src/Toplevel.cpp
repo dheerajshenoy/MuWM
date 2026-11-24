@@ -60,6 +60,9 @@ Toplevel::onCommit(void *)
         wlr_xdg_toplevel_set_size(xdg, 0, 0); // 0,0 = "client picks its size"
         // A client can ask for fullscreen before its first commit.
         wm->setFullscreen(this, xdg->requested.fullscreen);
+
+        setTiled(
+            !floating); // tell the client its edges are held by the compositor
     }
 }
 
@@ -181,6 +184,9 @@ Toplevel::setFullscreen(bool fullscreen)
     // Before the first commit the state is sent with the initial configure.
     if (xdg->base->initialized)
         wlr_xdg_toplevel_set_fullscreen(xdg, fullscreen);
+
+    setTiled(
+        !fullscreen); // tell the client its edges are held by the compositor
 }
 
 void
@@ -234,8 +240,8 @@ Toplevel::isFixedSize() const
     if (xsurface)
     {
         const xcb_size_hints_t *h = xsurface->size_hints;
-        constexpr uint32_t both   = XCB_ICCCM_SIZE_HINT_P_MIN_SIZE
-                                  | XCB_ICCCM_SIZE_HINT_P_MAX_SIZE;
+        constexpr uint32_t both
+            = XCB_ICCCM_SIZE_HINT_P_MIN_SIZE | XCB_ICCCM_SIZE_HINT_P_MAX_SIZE;
         return h && (h->flags & both) == both && h->min_width > 0
                && h->min_width == h->max_width && h->min_height > 0
                && h->min_height == h->max_height;
@@ -288,4 +294,64 @@ Toplevel::onRequestConfigure(void *data)
         wlr_xwayland_surface_configure(xsurface, x, y, xsurface->width,
                                        xsurface->height);
     }
+}
+
+void
+Toplevel::clampSize(int &w, int &h) const
+{
+    int minW = 0, minH = 0, maxW = 0, maxH = 0;
+
+    if (xsurface)
+    {
+        const xcb_size_hints_t *hints = xsurface->size_hints;
+        if (hints)
+        {
+            if (hints->flags & XCB_ICCCM_SIZE_HINT_P_MIN_SIZE)
+            {
+                minW = hints->min_width;
+                minH = hints->min_height;
+            }
+
+            if (hints->flags & XCB_ICCCM_SIZE_HINT_P_MAX_SIZE)
+            {
+                maxW = hints->max_width;
+                maxH = hints->max_height;
+            }
+        }
+    }
+    else
+    {
+        const auto &c = xdg->current;
+        minW          = c.min_width;
+        minH          = c.min_height;
+        maxW          = c.max_width;
+        maxH          = c.max_height;
+    }
+
+    // Apply max first, then min, so min wins if a client reports min > max.
+    if (maxW > 0)
+        w = std::min(w, maxW);
+    if (maxH > 0)
+        h = std::min(h, maxH);
+    if (minW > 0)
+        w = std::max(w, minW);
+    if (minH > 0)
+        h = std::max(h, minH);
+}
+
+void
+Toplevel::setTiled(bool tiled)
+{
+    if (xsurface)
+        return; // X11 has no tiled state
+
+    if (!xdg->base->initialized)
+        return; // before the first commit the state is sent with the initial
+                // configure
+
+    // Tell the client its four edges are held by the compositor.
+    const uint32_t edges = tiled ? (WLR_EDGE_TOP | WLR_EDGE_BOTTOM
+                                    | WLR_EDGE_LEFT | WLR_EDGE_RIGHT)
+                                 : WLR_EDGE_NONE;
+    wlr_xdg_toplevel_set_tiled(xdg, edges);
 }

@@ -12,8 +12,8 @@
 
 #include <algorithm>
 #include <csignal>
-#include <sys/wait.h>
 #include <linux/input-event-codes.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 MuWM::MuWM(const argparse::ArgumentParser &parser) : m_parser(parser)
@@ -201,6 +201,9 @@ MuWM::init()
     wlr_primary_selection_v1_device_manager_create(m_display);
     wlr_ext_data_control_manager_v1_create(m_display, 1);
     wlr_data_control_manager_v1_create(m_display);
+    wlr_viewporter_create(m_display);
+    wlr_fractional_scale_manager_v1_create(m_display, 1);
+
     m_lockManager = wlr_session_lock_manager_v1_create(m_display);
     m_newLock.bind<&MuWM::onNewLock>(&m_lockManager->events.new_lock, this);
 
@@ -258,6 +261,11 @@ MuWM::init()
     m_newDecoration.bind<&MuWM::onNewDecoration>(
         &m_decoManager->events.new_toplevel_decoration, this);
 
+    // GTK3 and some Qt apps only know the KDE protocol.
+    auto *kdeDeco = wlr_server_decoration_manager_create(m_display);
+    wlr_server_decoration_manager_set_default_mode(
+        kdeDeco, WLR_SERVER_DECORATION_MANAGER_MODE_SERVER);
+
     m_layerShell = wlr_layer_shell_v1_create(m_display, 4);
 
     m_newLayerShellSurface.bind<&MuWM::onNewLayerShellSurface>(
@@ -298,6 +306,9 @@ MuWM::handleNewOutput(wlr_output *output)
     if (wlr_output_mode *mode = wlr_output_preferred_mode(output))
         wlr_output_state_set_mode(&state, mode);
     wlr_output_commit_state(output, &state);
+    wlr_output_state_set_scale(&state, m_config.scale);
+
+    wlr_xcursor_manager_load(m_xcursor, m_config.scale);
     wlr_output_state_finish(&state);
 
     auto *o            = new Output{this, output};
@@ -398,7 +409,10 @@ MuWM::applyOutputConfig(wlr_output_configuration_v1 *config, bool test)
     {
         const wlr_output_head_v1_state &s = head->state;
         if (s.enabled)
+        {
             wlr_output_layout_add(m_layout, s.output, s.x, s.y);
+            wlr_xcursor_manager_load(m_xcursor, m_config.scale);
+        }
         else
             wlr_output_layout_remove(m_layout, s.output);
     }
@@ -915,6 +929,7 @@ MuWM::arrange(Workspace *ws)
 
     auto place = [](Toplevel *t, int x, int y, int w, int h, bool borders)
     {
+        t->clampSize(w, h);
         wlr_scene_node_set_position(&t->tree->node, x, y);
         t->setSize(w, h);
         t->setBordersVisible(borders);
@@ -943,9 +958,15 @@ MuWM::arrange(Workspace *ws)
     for (Toplevel *t : toplevels)
     {
         if (t->floating)
+        {
+            t->setTiled(false);
             placeFloating(t);
+        }
         else
+        {
+            t->setTiled(true);
             tiled.push_back(t);
+        }
     }
     if (tiled.empty())
         return;
@@ -1804,7 +1825,8 @@ MuWM::setFloating(Toplevel *t, bool floating)
 void
 MuWM::placeFloating(Toplevel *t)
 {
-    const wlr_box &b = t->floatBox;
+    wlr_box &b = t->floatBox;
+    t->clampSize(b.width, b.height);
     wlr_scene_node_set_position(&t->tree->node, b.x, b.y);
     t->setSize(b.width, b.height);
     t->setBordersVisible(true);

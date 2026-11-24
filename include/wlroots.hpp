@@ -1,9 +1,8 @@
 #pragma once
 
-#define WLR_USE_UNSTABLE // wlroots APIs are unstable; required to include them
+#define WLR_USE_UNSTABLE
 extern "C"
 {
-    // clang-format off
 #include <wayland-server-core.h>
 #define static // makes `float c[static 4]` legal in C++
 #include <wlr/backend.h>
@@ -24,6 +23,7 @@ extern "C"
 #include <wlr/types/wlr_ext_foreign_toplevel_list_v1.h>
 #include <wlr/types/wlr_ext_image_capture_source_v1.h>
 #include <wlr/types/wlr_ext_image_copy_capture_v1.h>
+#include <wlr/types/wlr_fractional_scale_v1.h>
 #include <wlr/types/wlr_output.h>
 #include <wlr/types/wlr_output_layout.h>
 #include <wlr/types/wlr_output_management_v1.h>
@@ -33,8 +33,10 @@ extern "C"
 #include <wlr/types/wlr_scene.h>
 #include <wlr/types/wlr_screencopy_v1.h>
 #include <wlr/types/wlr_seat.h>
+#include <wlr/types/wlr_server_decoration.h>
 #include <wlr/types/wlr_session_lock_v1.h>
 #include <wlr/types/wlr_subcompositor.h>
+#include <wlr/types/wlr_viewporter.h>
 #include <wlr/types/wlr_xcursor_manager.h>
 #include <wlr/types/wlr_xdg_decoration_v1.h>
 #include <wlr/types/wlr_xdg_dialog_v1.h>
@@ -52,6 +54,4 @@ extern "C"
 #undef class
 #include <xkbcommon/xkbcommon.h>
 #undef static
-
-    // clang-format on
 }

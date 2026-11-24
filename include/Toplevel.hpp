@@ -43,6 +43,8 @@ struct Toplevel
     void onRequestConfigure(void *data);
     void updateForeignHandle();
     void destroyForeignHandle();
+    void clampSize(int &w, int &h) const;
+    void setTiled(bool tiled);
 
     void setFocused(bool focused);
     void resizeBorders(int w, int h);

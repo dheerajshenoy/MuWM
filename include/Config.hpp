@@ -16,6 +16,8 @@ struct Config
 {
     NewClientPosition new_client_position = NewClientPosition::AfterCurrent;
 
+    float scale = 1.0f;
+
     struct Gaps
     {
         int value  = 10;
