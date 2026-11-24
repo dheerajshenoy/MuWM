@@ -75,6 +75,7 @@ public:
     void setFloating(Toplevel *, bool floating);
     void setFullscreen(Toplevel *, bool fullscreen);
     void setMasterRatio(float ratio);
+    void changeVt(int vt);
 
     enum Change
     {
@@ -177,6 +178,7 @@ private:
     void onNewConstraint(void *data);
     void onConstraintDestroy(void *data);
     void onWorkspaceCommit(void *data);
+    void onSessionActive(void *data);
 
     void updateConstraint(wlr_surface *focus);
     void deactivateConstraint();
@@ -230,6 +232,7 @@ private:
     wlr_cursor_shape_manager_v1 *m_cursorShapeManager = nullptr;
     wlr_ext_foreign_toplevel_list_v1 *m_foreignList   = nullptr;
     wlr_session_lock_manager_v1 *m_lockManager        = nullptr;
+    wlr_session *m_session                            = nullptr;
     wlr_session_lock_v1 *m_lock                       = nullptr;
     wlr_ext_foreign_toplevel_image_capture_source_manager_v1
         *m_toplevelCaptureManager                      = nullptr;
@@ -277,6 +280,7 @@ private:
     Listener<MuWM> m_newConstraint;
     Listener<MuWM> m_constraintDestroy;
     Listener<MuWM> m_workspaceCommit;
+    Listener<MuWM> m_sessionActive;
 
     // Super+drag: left button moves a window, right button resizes it.
     enum class Grab

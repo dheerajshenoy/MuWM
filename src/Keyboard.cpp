@@ -22,13 +22,26 @@ Keyboard::onKey(void *data)
     bool handled = false;
     if (ev->state == WL_KEYBOARD_KEY_STATE_PRESSED)
     {
+
         const uint32_t mods
             = wlr_keyboard_get_modifiers(kb) & kBindMask; // ignore Caps/NumLock
 
         const xkb_keysym_t *syms;
         int n = xkb_state_key_get_syms(kb->xkb_state, keycode, &syms);
+
         for (int i = 0; i < n && !handled; i++)
-            handled = wm->handleKeybinding(mods, syms[i]);
+        {
+            const xkb_keysym_t sym = syms[i];
+
+            if (sym >= XKB_KEY_XF86Switch_VT_1
+                && sym <= XKB_KEY_XF86Switch_VT_12)
+            {
+                wm->changeVt(sym - XKB_KEY_XF86Switch_VT_1 + 1);
+                return; // consumed
+            }
+
+            handled = wm->handleKeybinding(mods, sym);
+        }
 
         if (!handled)
         { // also try the unshifted symbol, so "Alt+Shift+1" works

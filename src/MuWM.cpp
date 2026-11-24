@@ -65,6 +65,10 @@ MuWM::~MuWM()
     m_requestSetPrimary.unbind();
     m_cursorShape.unbind();
     m_requestSetCursor.unbind();
+    m_newConstraint.unbind();
+    m_constraintDestroy.unbind();
+    m_activationRequest.unbind();
+    m_sessionActive.unbind();
 
     if (m_outputListener.listener.link.prev)
         wl_list_remove(&m_outputListener.listener.link);
@@ -131,8 +135,13 @@ MuWM::init()
             return 0;
         }, m_display);
 
-    m_backend
-        = wlr_backend_autocreate(wl_display_get_event_loop(m_display), nullptr);
+    m_backend = wlr_backend_autocreate(wl_display_get_event_loop(m_display),
+                                       &m_session);
+
+    if (m_session)
+        m_sessionActive.bind<&MuWM::onSessionActive>(&m_session->events.active,
+                                                     this);
+
     if (!m_backend)
     {
         wlr_log(WLR_ERROR, "Failed to create backend");
@@ -2563,4 +2572,26 @@ MuWM::onWorkspaceCommit(void *data)
         if (ws && ws->output)
             switchWorkspace(ws->output, ws);
     }
+}
+
+void
+MuWM::changeVt(int vt)
+{
+    if (m_session)
+    {
+        wlr_session_change_vt(m_session, vt);
+
+        if (m_session->active)
+            arrange();
+    }
+}
+
+void
+MuWM::onSessionActive(void *)
+{
+    if (!m_session->active)
+        return; // we just lost the VT
+    for (Output *o : m_outputs)
+        wlr_output_schedule_frame(o->output);
+    arrange();
 }
