@@ -641,6 +641,10 @@ MuWM::run(const std::string &startupCmd)
     setenv("XDG_CURRENT_DESKTOP", "muwm", 1);
     setenv("XDG_SESSION_DESKTOP", "muwm", 1);
 
+    spawn("dbus-update-activation-environment --systemd "
+          "WAYLAND_DISPLAY XDG_CURRENT_DESKTOP XDG_SESSION_TYPE "
+          "XDG_SESSION_DESKTOP");
+
     // The config must be loaded before the backend starts: starting it
     // announces the existing keyboards, whose keymap is built from the config.
     // The socket already exists, so clients spawned by the config can connect.
