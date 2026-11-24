@@ -823,6 +823,18 @@ MuWM::applyPointerConfig(Pointer *pointer)
         libinput_device_config_tap_set_enabled(
             dev, m_config.touchpad.tap_to_click ? LIBINPUT_CONFIG_TAP_ENABLED
                                                 : LIBINPUT_CONFIG_TAP_DISABLED);
+
+    if (libinput_device_config_middle_emulation_is_available(dev))
+        libinput_device_config_middle_emulation_set_enabled(
+            dev, m_config.touchpad.middle_emulation
+                     ? LIBINPUT_CONFIG_MIDDLE_EMULATION_ENABLED
+                     : LIBINPUT_CONFIG_MIDDLE_EMULATION_DISABLED);
+
+    if (libinput_device_config_dwt_is_available(dev))
+        libinput_device_config_dwt_set_enabled(
+            dev, m_config.touchpad.disable_while_typing
+                     ? LIBINPUT_CONFIG_DWT_ENABLED
+                     : LIBINPUT_CONFIG_DWT_DISABLED);
 }
 
 // Re-applies the settings to every existing device of the affected kinds.
@@ -3253,23 +3265,23 @@ MuWM::onPinchBegin(void *data)
 {
     auto *ev = static_cast<wlr_pointer_pinch_begin_event *>(data);
     notifyActivity();
-    wlr_pointer_gestures_v1_send_pinch_begin(m_pointerGestures, m_seat, ev->time_msec,
-                                             ev->fingers);
+    wlr_pointer_gestures_v1_send_pinch_begin(m_pointerGestures, m_seat,
+                                             ev->time_msec, ev->fingers);
 }
 
 void
 MuWM::onPinchUpdate(void *data)
 {
     auto *ev = static_cast<wlr_pointer_pinch_update_event *>(data);
-    wlr_pointer_gestures_v1_send_pinch_update(m_pointerGestures, m_seat, ev->time_msec,
-                                              ev->dx, ev->dy, ev->scale,
-                                              ev->rotation);
+    wlr_pointer_gestures_v1_send_pinch_update(m_pointerGestures, m_seat,
+                                              ev->time_msec, ev->dx, ev->dy,
+                                              ev->scale, ev->rotation);
 }
 
 void
 MuWM::onPinchEnd(void *data)
 {
     auto *ev = static_cast<wlr_pointer_pinch_end_event *>(data);
-    wlr_pointer_gestures_v1_send_pinch_end(m_pointerGestures, m_seat, ev->time_msec,
-                                           ev->cancelled);
+    wlr_pointer_gestures_v1_send_pinch_end(m_pointerGestures, m_seat,
+                                           ev->time_msec, ev->cancelled);
 }

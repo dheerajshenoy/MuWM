@@ -657,7 +657,7 @@ int
 luaSetMasterRatio(lua_State *L)
 {
     auto ratio = static_cast<float>(luaL_checknumber(L, 1));
-    MuWM *wm = wmFrom(L);
+    MuWM *wm   = wmFrom(L);
     wm->setMasterRatio(wm->currentWorkspace(), ratio);
     return 0;
 }
@@ -944,7 +944,8 @@ MuWM::initLuaBindings()
 
     // lua ---@class mu.opts.border
     borderGroup.fields = {
-        // lua ---@field width? integer Border width in pixels. Must be between 0
+        // lua ---@field width? integer Border width in pixels. Must be between
+        // 0
         // and 1000.
         intField("width", &bd.width, 0, 1000, MuWM::ChangeLayout),
 
@@ -965,7 +966,8 @@ MuWM::initLuaBindings()
 
     // lua ---@class mu.opts.layout
     layoutGroup.fields = {
-        // lua ---@field master_ratio? number The ratio of the master area to the
+        // lua ---@field master_ratio? number The ratio of the master area to
+        // the
         // whole screen. Must be between 0 and 1.
         floatField("master_ratio", &m_config.layout.master_ratio,
                    MuWM::ChangeLayout, 0.0f, 1.0f),
@@ -1006,7 +1008,8 @@ MuWM::initLuaBindings()
         // lua ---@field value? integer Window gap in pixels.
         intField("value", &m_config.gaps.value, 0, 1000, MuWM::ChangeLayout),
 
-        // lua ---@field smart? boolean Whether to hide gaps when only one window
+        // lua ---@field smart? boolean Whether to hide gaps when only one
+        // window
         // is visible.
         boolField("smart", &m_config.gaps.smart, MuWM::ChangeLayout),
     };
@@ -1059,6 +1062,16 @@ MuWM::initLuaBindings()
         // lua ---@field tap_to_click? boolean Whether to enable tap-to-click on
         // the touchpad.
         boolField("tap_to_click", &m_config.touchpad.tap_to_click,
+                  MuWM::ChangePointer),
+
+        // lua ---@field disable_while_typing? boolean Whether to disable the
+        // touchpad while typing.
+        boolField("disable_while_typing",
+                  &m_config.touchpad.disable_while_typing, MuWM::ChangePointer),
+
+        // lua ---@field middle_emulation? boolean Whether to enable middle
+        // button emulation on the touchpad.
+        boolField("middle_emulation", &m_config.touchpad.middle_emulation,
                   MuWM::ChangePointer),
     };
 

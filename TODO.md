@@ -7,8 +7,6 @@ Tiling Wayland compositor in C++ on wlroots (CMake).
 - [ ] More layouts (monocle, grid) and a way to switch
 - [ ] Window capture of windows on hidden workspaces (their scene node is disabled, so the frame is blank)
 - [ ] Output and input hotplug (add and remove)
-- [ ] Session entry: `/usr/share/wayland-sessions/muwm.desktop`, `XDG_CURRENT_DESKTOP`, `XDG_SESSION_TYPE`, dbus activation environment
-- [ ] Portal config (`muwm-portals.conf` using `wlr;gtk`) so screen sharing and file pickers work; log to a file when run from a TTY
 - [ ] Laptop input: libinput settings (tap-to-click, natural scroll, disable-while-typing), lid switch turns the internal panel off
 - [ ] Test output hotplug: unplug a monitor with windows on it, unplug the last output
 - [ ] Cursor theme: pass the theme to the xcursor manager and set `XCURSOR_THEME` / `XCURSOR_SIZE` for clients

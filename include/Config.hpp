@@ -49,8 +49,10 @@ struct Config
 
     struct TouchpadConfig
     {
-        bool natural_scroll = false;
-        bool tap_to_click   = true;
+        bool natural_scroll       = false;
+        bool tap_to_click         = true;
+        bool middle_emulation     = true;
+        bool disable_while_typing = true;
     } touchpad;
 
     struct Layout

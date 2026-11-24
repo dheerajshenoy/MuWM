@@ -63,6 +63,8 @@
 ---@class mu.opts.touchpad
 ---@field natural_scroll? boolean Whether to enable natural scrolling on the touchpad.
 ---@field tap_to_click? boolean Whether to enable tap-to-click on the touchpad.
+---@field disable_while_typing? boolean Whether to disable the touchpad while typing.
+---@field middle_emulation? boolean Whether to enable middle button emulation on the touchpad.
 
 ---@class mu
 ---@field opts mu.opts User-configurable options.
