@@ -16,7 +16,6 @@ Tiling Wayland compositor in C++ on wlroots (CMake).
 - [ ] Small protocols: single-pixel-buffer, xdg-foreign
 - [ ] Clean exit on SIGTERM; reap child processes
 - [ ] Run under ASan / UBSan, check listeners for leaks
-- [ ] README and license
 - [ ] Check that the name `muwm` is free on GitHub and the AUR
 - [ ] AUR PKGBUILD; decide which wlroots version to depend on (the API changes between releases)
 - [ ] text-input-v3 + input-method-v2: IME support, e.g. fcitx.
