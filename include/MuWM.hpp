@@ -190,6 +190,7 @@ private:
     void onSessionActive(void *data);
     void onNewInhibitor(void *data);
     void onOutputPowerSetMode(void *data);
+    bool wantsTearing(const Output *) const;
 
     void updateConstraint(wlr_surface *focus);
     void deactivateConstraint();
@@ -258,6 +259,8 @@ private:
     wlr_idle_inhibit_manager_v1 *m_idleInhibit                = nullptr;
     wlr_output_power_manager_v1 *m_outputPower                = nullptr;
     wlr_gamma_control_manager_v1 *m_gammaControl              = nullptr;
+    wlr_content_type_manager_v1 *m_contentType                = nullptr;
+    wlr_tearing_control_manager_v1 *m_tearing                 = nullptr;
 
     Output *m_focusedOutput = nullptr;
     std::vector<Output *> m_outputs;

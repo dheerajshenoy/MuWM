@@ -330,6 +330,12 @@ MuWM::init()
     m_gammaControl = wlr_gamma_control_manager_v1_create(m_display);
     wlr_scene_set_gamma_control_manager_v1(m_scene, m_gammaControl);
 
+    wlr_presentation_create(m_display, m_backend, 2);
+
+    m_contentType = wlr_content_type_manager_v1_create(m_display, 1);
+
+    m_tearing = wlr_tearing_control_manager_v1_create(m_display, 1);
+
     // Lazy: Xwayland only starts when the first X11 client connects.
     m_xwayland = wlr_xwayland_create(m_display, m_compositor, true);
     if (m_xwayland)
@@ -2701,4 +2707,31 @@ MuWM::onOutputPowerSetMode(void *data)
 
     if (enable)
         wlr_output_schedule_frame(ev->output); // restart the frame loop
+}
+
+bool
+MuWM::wantsTearing(const Output *o) const
+{
+    if (!o->workspace)
+        return false;
+
+    // Only a fullscreen window may tear, so nothing else can make the desktop
+    // tear.
+    for (const Toplevel *t : o->workspace->toplevels)
+    {
+        if (!t->fullscreen)
+            continue;
+
+        if (wlr_tearing_control_manager_v1_surface_hint_from_surface(
+                m_tearing, t->surface())
+            == WP_TEARING_CONTROL_V1_PRESENTATION_HINT_ASYNC)
+            return true;
+
+        // Games that didn't ask can still be recognised by their content type.
+        // Video wants vsync, so it is not included.
+        if (wlr_surface_get_content_type_v1(m_contentType, t->surface())
+            == WP_CONTENT_TYPE_V1_TYPE_GAME)
+            return true;
+    }
+    return false;
 }
