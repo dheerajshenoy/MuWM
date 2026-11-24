@@ -140,3 +140,8 @@ install(FILES lua/mu.lua
 install(FILES README.md LICENSE
     DESTINATION ${CMAKE_INSTALL_DOCDIR}
 )
+
+# xdg-desktop-portal reads this by matching XDG_CURRENT_DESKTOP=muwm.
+install(FILES data/muwm-portals.conf
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/xdg-desktop-portal
+)
