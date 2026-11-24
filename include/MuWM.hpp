@@ -62,6 +62,7 @@ public:
     void activateToplevel(Toplevel *);
     void notifyActivity();
     void updateIdleInhibit(const wlr_idle_inhibitor_v1 *ignore = nullptr);
+    bool wantsTearing(const Output *) const;
 
     // Window
     void focusNext();
@@ -190,7 +191,6 @@ private:
     void onSessionActive(void *data);
     void onNewInhibitor(void *data);
     void onOutputPowerSetMode(void *data);
-    bool wantsTearing(const Output *) const;
 
     void updateConstraint(wlr_surface *focus);
     void deactivateConstraint();

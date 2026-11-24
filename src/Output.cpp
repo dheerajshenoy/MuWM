@@ -5,7 +5,26 @@
 void
 Output::onFrame(void *)
 {
-    wlr_scene_output_commit(sceneOutput, nullptr);
+    if (wlr_scene_output_needs_frame(sceneOutput))
+    {
+        wlr_output_state state;
+        wlr_output_state_init(&state);
+        if (wlr_scene_output_build_state(sceneOutput, &state, nullptr))
+        {
+            // A fullscreen game that asked for it is shown without waiting
+            // for vblank. Not every driver can do that, so test first and
+            // fall back to a normal page flip.
+            if (wm->wantsTearing(this))
+            {
+                state.tearing_page_flip = true;
+                if (!wlr_output_test_state(output, &state))
+                    state.tearing_page_flip = false;
+            }
+            wlr_output_commit_state(output, &state);
+        }
+        wlr_output_state_finish(&state);
+    }
+
     timespec now;
     clock_gettime(CLOCK_MONOTONIC, &now);
     wlr_scene_output_send_frame_done(sceneOutput, &now);
