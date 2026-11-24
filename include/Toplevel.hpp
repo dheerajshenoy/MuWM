@@ -15,6 +15,9 @@ struct Toplevel
     wlr_scene_tree *surfaceTree    = nullptr; // just the client's surfaces
     wlr_scene_rect *border[4]      = {};      // top, bottom, left, right
     wlr_box floatBox               = {};
+    wlr_foreign_toplevel_handle_v1 *wlrHandle = nullptr; // while mapped
+
+    // Event listeners
     Listener<Toplevel> map;
     Listener<Toplevel> unmap;
     Listener<Toplevel> commit;
@@ -22,9 +25,12 @@ struct Toplevel
     Listener<Toplevel> requestFullscreen;
     Listener<Toplevel> setTitle;
     Listener<Toplevel> setAppId;
+    Listener<Toplevel> requestActivate;
+    Listener<Toplevel> requestClose;
     Listener<Toplevel> associate;        // X11: the window got a wl_surface
     Listener<Toplevel> dissociate;       // X11: the wl_surface is going away
     Listener<Toplevel> requestConfigure; // X11: the client wants a geometry
+
     wlr_ext_foreign_toplevel_handle_v1 *foreignHandle = nullptr; // while mapped
     Workspace *workspace                              = nullptr;
     uint64_t id                                       = 0;
@@ -52,9 +58,13 @@ struct Toplevel
     void onRequestConfigure(void *data);
     void updateForeignHandle();
     void destroyForeignHandle();
+    void destroyWlrHandle();
+    void syncForeignOutput(wlr_output *previous);
     void clampSize(int &w, int &h) const;
     void setTiled(bool tiled);
     void fitBorders();
+    void onRequestActivate(void *data);
+    void onRequestClose(void *data);
 
     void setFocused(bool focused);
     void resizeBorders(int w, int h);

@@ -7,6 +7,19 @@ Toplevel::onMap(void *)
 {
     wlr_scene_node_set_enabled(&tree->node, true); // undo the hide from unmap
     wlr_log(WLR_INFO, "Window mapped: %s", title()[0] ? title() : "(untitled)");
+
+    wlrHandle
+        = wlr_foreign_toplevel_handle_v1_create(wm->foreignToplevelManager());
+
+    requestActivate.bind<&Toplevel::onRequestActivate>(
+        &wlrHandle->events.request_activate, this);
+
+    requestClose.bind<&Toplevel::onRequestClose>(
+        &wlrHandle->events.request_close, this);
+
+    wlr_foreign_toplevel_handle_v1_set_title(wlrHandle, title());
+    wlr_foreign_toplevel_handle_v1_set_app_id(wlrHandle, appId());
+
     // Dialogs (they have a parent) and fixed-size windows don't belong in the
     // tiled layout.
     if (isDialog() || isFixedSize())
@@ -27,6 +40,13 @@ Toplevel::updateForeignHandle()
 {
     if (!foreignHandle)
         return;
+
+    if (wlrHandle)
+    {
+        wlr_foreign_toplevel_handle_v1_set_title(wlrHandle, title());
+        wlr_foreign_toplevel_handle_v1_set_app_id(wlrHandle, appId());
+    }
+
     wlr_ext_foreign_toplevel_handle_v1_state st{title(), appId()};
     wlr_ext_foreign_toplevel_handle_v1_update_state(foreignHandle, &st);
 }
@@ -95,6 +115,7 @@ Toplevel::onUnmap(void *)
 {
     wlr_scene_node_set_enabled(&tree->node, false); // hides the borders too
     destroyForeignHandle();
+    destroyWlrHandle();
     wm->removeToplevel(this);
 }
 
@@ -102,6 +123,7 @@ void
 Toplevel::onDestroy(void *)
 {
     destroyForeignHandle();
+    destroyWlrHandle();
     wm->removeToplevel(this);
     wlr_scene_node_destroy(&tree->node); // container, surface tree and borders
     map.unbind();
@@ -114,6 +136,8 @@ Toplevel::onDestroy(void *)
     associate.unbind();
     dissociate.unbind();
     requestConfigure.unbind();
+    requestActivate.unbind();
+    requestClose.unbind();
     delete this;
 }
 
@@ -185,11 +209,17 @@ Toplevel::setActivated(bool activated)
         wlr_xwayland_surface_activate(xsurface, activated);
     else
         wlr_xdg_toplevel_set_activated(xdg, activated);
+
+    if (wlrHandle)
+        wlr_foreign_toplevel_handle_v1_set_activated(wlrHandle, activated);
 }
 
 void
 Toplevel::setFullscreen(bool fullscreen)
 {
+    if (wlrHandle)
+        wlr_foreign_toplevel_handle_v1_set_fullscreen(wlrHandle, fullscreen);
+
     if (xsurface)
     {
         wlr_xwayland_surface_set_fullscreen(xsurface, fullscreen);
@@ -382,4 +412,43 @@ Toplevel::setTiled(bool tiled)
                                     | WLR_EDGE_LEFT | WLR_EDGE_RIGHT)
                                  : WLR_EDGE_NONE;
     wlr_xdg_toplevel_set_tiled(xdg, edges);
+}
+
+void
+Toplevel::onRequestActivate(void *)
+{
+    wm->activateToplevel(this);
+}
+
+void
+Toplevel::onRequestClose(void *)
+{
+    close();
+}
+
+// Tell taskbars which output the window is on; they list per output.
+void
+Toplevel::syncForeignOutput(wlr_output *previous)
+{
+    if (!wlrHandle)
+        return;
+    wlr_output *now
+        = workspace && workspace->output ? workspace->output->output : nullptr;
+    if (now == previous)
+        return;
+    if (previous)
+        wlr_foreign_toplevel_handle_v1_output_leave(wlrHandle, previous);
+    if (now)
+        wlr_foreign_toplevel_handle_v1_output_enter(wlrHandle, now);
+}
+
+void
+Toplevel::destroyWlrHandle()
+{
+    if (!wlrHandle)
+        return;
+    requestActivate.unbind();
+    requestClose.unbind();
+    wlr_foreign_toplevel_handle_v1_destroy(wlrHandle);
+    wlrHandle = nullptr;
 }

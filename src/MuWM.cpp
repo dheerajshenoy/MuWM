@@ -310,6 +310,9 @@ MuWM::init()
     m_newConstraint.bind<&MuWM::onNewConstraint>(
         &m_constraints->events.new_constraint, this);
 
+    m_foreignToplevelManager
+        = wlr_foreign_toplevel_manager_v1_create(m_display);
+
     // Lazy: Xwayland only starts when the first X11 client connects.
     m_xwayland = wlr_xwayland_create(m_display, m_compositor, true);
     if (m_xwayland)
@@ -405,6 +408,7 @@ MuWM::handleNewOutput(wlr_output *output)
         {
             t->workspace = o->workspace;
             wlr_scene_node_reparent(&t->tree->node, t->workspace->sceneTree);
+            t->syncForeignOutput(nullptr);
         }
         o->workspace->toplevels       = std::move(m_unassigned.toplevels);
         o->workspace->focusHistory    = std::move(m_unassigned.focusHistory);
@@ -875,6 +879,8 @@ MuWM::addToplevel(Toplevel *t)
         if (t->workspace->sceneTree)
             wlr_scene_node_reparent(&t->tree->node, t->workspace->sceneTree);
     }
+
+    t->syncForeignOutput(nullptr);
 
     auto &toplevels = t->workspace->toplevels;
     insertNewTopLevel(toplevels, t);
@@ -1799,8 +1805,11 @@ MuWM::toplevelToWorkspace(Toplevel *toplevel, Workspace *ws_target)
             ws_old->focusedToplevel = nullptr;
     }
 
+    wlr_output *previousOutput
+        = ws_old && ws_old->output ? ws_old->output->output : nullptr;
     toplevel->workspace = ws_target;
     ws_target->toplevels.push_back(toplevel);
+    toplevel->syncForeignOutput(previousOutput);
 
     wlr_scene_node_reparent(&toplevel->tree->node, ws_target->sceneTree);
 
@@ -2458,14 +2467,13 @@ MuWM::onActivationRequest(void *data)
     wlr_surface *focused = m_seat->keyboard_state.focused_surface;
     if (ev->token->surface && ev->token->surface != focused)
     {
-        wlr_ext_workspace_handle_v1_set_urgent(target->workspace->handle, true);
+        if (target->workspace && target->workspace->handle)
+            wlr_ext_workspace_handle_v1_set_urgent(target->workspace->handle,
+                                                   true);
         return;
     }
 
-    if (target->workspace && target->workspace->output
-        && target->workspace != target->workspace->output->workspace)
-        switchWorkspace(target->workspace->output, target->workspace);
-    focusToplevel(target);
+    activateToplevel(target);
 }
 
 void
@@ -2593,4 +2601,15 @@ MuWM::onSessionActive(void *)
     for (Output *o : m_outputs)
         wlr_output_schedule_frame(o->output);
     arrange();
+}
+
+void
+MuWM::activateToplevel(Toplevel *t)
+{
+    if (!t || !t->workspace)
+        return;
+    Workspace *ws = t->workspace;
+    if (ws->output && ws != ws->output->workspace)
+        switchWorkspace(ws->output, ws); // bring its workspace on screen first
+    focusToplevel(t);
 }

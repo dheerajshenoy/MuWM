@@ -59,6 +59,9 @@ public:
         return m_layout;
     }
 
+
+    void activateToplevel(Toplevel *);
+
     // Window
     void focusNext();
     void focusPrev();
@@ -142,6 +145,11 @@ public:
     {
         return currentWorkspace() ? currentWorkspace()->focusedToplevel
                                   : nullptr;
+    }
+
+    wlr_foreign_toplevel_manager_v1 *foreignToplevelManager() const
+    {
+        return m_foreignToplevelManager;
     }
 
 private:
@@ -235,13 +243,14 @@ private:
     wlr_session *m_session                            = nullptr;
     wlr_session_lock_v1 *m_lock                       = nullptr;
     wlr_ext_foreign_toplevel_image_capture_source_manager_v1
-        *m_toplevelCaptureManager                      = nullptr;
-    wlr_xdg_activation_v1 *m_xdgActivation             = nullptr;
-    wlr_ext_workspace_manager_v1 *m_workspaceManager   = nullptr;
-    wlr_pointer_constraints_v1 *m_constraints          = nullptr;
-    wlr_relative_pointer_manager_v1 *m_relativePointer = nullptr;
-    wlr_pointer_constraint_v1 *m_activeConstraint      = nullptr;
-    wlr_linux_dmabuf_v1 *m_dmabuf                      = nullptr;
+        *m_toplevelCaptureManager                             = nullptr;
+    wlr_xdg_activation_v1 *m_xdgActivation                    = nullptr;
+    wlr_ext_workspace_manager_v1 *m_workspaceManager          = nullptr;
+    wlr_pointer_constraints_v1 *m_constraints                 = nullptr;
+    wlr_relative_pointer_manager_v1 *m_relativePointer        = nullptr;
+    wlr_pointer_constraint_v1 *m_activeConstraint             = nullptr;
+    wlr_foreign_toplevel_manager_v1 *m_foreignToplevelManager = nullptr;
+    wlr_linux_dmabuf_v1 *m_dmabuf                             = nullptr;
 
     Output *m_focusedOutput = nullptr;
     std::vector<Output *> m_outputs;
