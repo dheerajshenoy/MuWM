@@ -1838,6 +1838,7 @@ MuWM::toplevelToWorkspace(Toplevel *toplevel, Workspace *ws_target)
         focusToplevel(toplevel); // also puts it at the back of the new history
         if (ws_old && !ws_old->focusedToplevel)
             ws_old->focusedToplevel = prev; // no keyboard change, just state
+        updateIdleInhibit();
         return;
     }
 
