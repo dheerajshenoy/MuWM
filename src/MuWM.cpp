@@ -1141,7 +1141,9 @@ MuWM::arrange(Workspace *ws)
         return;
     }
 
-    const int masterW = (area.width - gap) * m_config.layout.master_ratio;
+    const int masterW = (area.width - gap)
+                        * (ws->masterRatio >= 0.0f ? ws->masterRatio
+                                                   : m_config.layout.master_ratio);
     const int stackW  = area.width - gap - masterW;
     place(tiled[0], area.x, area.y, masterW, area.height, borders);
 
@@ -2092,12 +2094,14 @@ MuWM::setFullscreen(Toplevel *toplevel, bool fullscreen)
 }
 
 void
-MuWM::setMasterRatio(float ratio)
+MuWM::setMasterRatio(Workspace *ws, float ratio)
 {
     if (ratio < 0.0f || ratio > 1.0f)
         return;
-    m_config.layout.master_ratio = ratio;
-    scheduleApply(ChangeLayout);
+    if (!ws)
+        return;
+    ws->masterRatio = ratio;
+    arrange(ws);
 }
 
 void

@@ -81,7 +81,7 @@ public:
     void toggleFloating();
     void setFloating(Toplevel *, bool floating);
     void setFullscreen(Toplevel *, bool fullscreen);
-    void setMasterRatio(float ratio);
+    void setMasterRatio(Workspace *ws, float ratio);
     void changeVt(int vt);
     void focusOutput(wlr_direction dir);
     void moveToOutput(wlr_direction dir);

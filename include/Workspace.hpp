@@ -15,4 +15,5 @@ struct Workspace
     std::vector<Toplevel *> focusHistory; // most recent last
     std::vector<Toplevel *> toplevels;
     std::string name;
+    float masterRatio = -1.0f; // < 0: use the configured default
 };

@@ -641,7 +641,8 @@ int
 luaSetMasterRatio(lua_State *L)
 {
     auto ratio = static_cast<float>(luaL_checknumber(L, 1));
-    wmFrom(L)->setMasterRatio(ratio);
+    MuWM *wm = wmFrom(L);
+    wm->setMasterRatio(wm->currentWorkspace(), ratio);
     return 0;
 }
 
