@@ -1426,7 +1426,9 @@ MuWM::onNewLayerShellSurface(void *data)
     auto *ls = static_cast<wlr_layer_surface_v1 *>(data);
 
     // The client may leave the output unspecified; the compositor must
-    // pick.
+    // pick: the focused output, or failing that the middle of the layout.
+    if (!ls->output && m_focusedOutput)
+        ls->output = m_focusedOutput->output;
     if (!ls->output)
         ls->output = wlr_output_layout_get_center_output(m_layout);
     if (!ls->output)
