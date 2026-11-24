@@ -2193,25 +2193,30 @@ void
 MuWM::endGrab()
 {
     Toplevel *t = m_grabbed; // the window that was dragged, not the focused one
-    m_grab      = Grab::None;
-    m_grabbed   = nullptr;
+    // A tile that was dragged goes back into the layout when it is dropped. A
+    // floating window stays where it was dropped.
+    const bool retile = m_grab == Grab::Move && t && !t->floating;
+    m_grab            = Grab::None;
+    m_grabbed         = nullptr;
 
     if (!t || !t->workspace || !t->workspace->output)
         return;
 
+    // Dropped with its center on another monitor: it goes to that monitor.
     wlr_output *under = wlr_output_layout_output_at(
         m_layout, t->floatBox.x + t->floatBox.width / 2.0,
         t->floatBox.y + t->floatBox.height / 2.0);
-    if (!under)
-        return; // center is off every output: stay where we are
+    if (under)
+        for (Output *o : m_outputs)
+            if (o->output == under)
+            {
+                if (o != t->workspace->output)
+                    toplevelToWorkspace(t, o->workspace);
+                break;
+            }
 
-    for (Output *o : m_outputs)
-        if (o->output == under)
-        {
-            if (o != t->workspace->output)
-                toplevelToWorkspace(t, o->workspace);
-            return;
-        }
+    if (retile && t->workspace)
+        arrange(t->workspace);
 }
 
 void
