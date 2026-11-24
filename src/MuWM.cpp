@@ -1224,8 +1224,9 @@ MuWM::processMotion(uint32_t timeMsec, bool allowFocus)
     double sx = 0, sy = 0;
     Toplevel *t = toplevelAt(m_cursor->x, m_cursor->y, &surface, &sx, &sy);
 
-    if (m_config.focus_follows_mouse && t && t != focusedToplevel())
-        focusToplevel(t, allowFocus);
+    if (allowFocus && m_config.focus_follows_mouse && t
+        && t != focusedToplevel())
+        focusToplevel(t, m_config.raise_on_focus);
 
     // Judge by the surface, not the window: X11 menus and layer-shell surfaces
     // have a surface under the pointer but no Toplevel.

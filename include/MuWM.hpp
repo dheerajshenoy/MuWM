@@ -39,7 +39,7 @@ public:
     bool run(const std::string &startupCmd = {});
     void handleNewToplevel(wlr_xdg_toplevel *xdg);
     void handleNewInput(wlr_input_device *device);
-    void focusToplevel(Toplevel *t, bool raise = false);
+    void focusToplevel(Toplevel *t, bool raise = true);
     WindowInfo windowInfo(const Toplevel *t) const;
     void addToplevel(Toplevel *t);
     void removeToplevel(Toplevel *t);
