@@ -225,6 +225,7 @@ private:
     void endGrab();
     void insertNewTopLevel(std::vector<Toplevel *> &toplevels, Toplevel *t);
     Output *adjacentOutput(wlr_direction dir);
+    void setFocusedOutput(Output *out);
     Workspace *createWorkspace(Output *o, const std::string &name,
                                size_t index);
     void applyWorkspaces();

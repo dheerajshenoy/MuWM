@@ -1224,9 +1224,26 @@ MuWM::processMotion(uint32_t timeMsec, bool allowFocus)
     double sx = 0, sy = 0;
     Toplevel *t = toplevelAt(m_cursor->x, m_cursor->y, &surface, &sx, &sy);
 
-    if (allowFocus && m_config.focus_follows_mouse && t
-        && t != focusedToplevel())
-        focusToplevel(t, m_config.raise_on_focus);
+    if (allowFocus && m_config.focus_follows_mouse)
+    {
+        if (t)
+        {
+            if (t != focusedToplevel())
+                focusToplevel(t, m_config.raise_on_focus);
+        }
+        else if (wlr_output *wo = wlr_output_layout_output_at(
+                     m_layout, m_cursor->x, m_cursor->y))
+        {
+            // Over an empty part of a monitor (no window): the monitor itself
+            // gains focus.
+            for (Output *o : m_outputs)
+                if (o->output == wo)
+                {
+                    setFocusedOutput(o);
+                    break;
+                }
+        }
+    }
 
     // Judge by the surface, not the window: X11 menus and layer-shell surfaces
     // have a surface under the pointer but no Toplevel.
@@ -1689,15 +1706,13 @@ MuWM::focusPrev()
                                     % ws->toplevels.size()]);
 }
 
+// Makes `out` the focused monitor: drops the focus on the old one, then
+// focuses whatever the new monitor's workspace used last.
 void
-MuWM::focusOutput(wlr_direction dir)
+MuWM::setFocusedOutput(Output *out)
 {
-    if (!m_focusedOutput || m_locked)
+    if (!out || out == m_focusedOutput)
         return;
-
-    Output *out = adjacentOutput(dir);
-    if (!out)
-        return; // no monitor in that direction
 
     // Drop the focus on the old monitor first (border, activated state).
     if (Toplevel *old = focusedToplevel())
@@ -1707,7 +1722,6 @@ MuWM::focusOutput(wlr_direction dir)
     }
     m_focusedOutput = out;
 
-    // Focus whatever that monitor's workspace used last.
     Workspace *ws = out->workspace;
     Toplevel *t   = ws ? ws->focusedToplevel : nullptr;
     if (!t && ws && !ws->toplevels.empty())
@@ -1720,6 +1734,19 @@ MuWM::focusOutput(wlr_direction dir)
     }
     else if (!m_focusedLayer && !m_focusedUnmanaged)
         wlr_seat_keyboard_notify_clear_focus(m_seat); // empty monitor
+}
+
+void
+MuWM::focusOutput(wlr_direction dir)
+{
+    if (!m_focusedOutput || m_locked)
+        return;
+
+    Output *out = adjacentOutput(dir);
+    if (!out)
+        return; // no monitor in that direction
+
+    setFocusedOutput(out);
 
     // Move the pointer along so mouse and keyboard stay on the same monitor.
     wlr_box b;
