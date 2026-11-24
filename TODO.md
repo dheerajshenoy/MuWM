@@ -21,3 +21,10 @@ Tiling Wayland compositor in C++ on wlroots (CMake).
 - [ ] text-input-v3 + input-method-v2: IME support, e.g. fcitx.
 - [ ] virtual-keyboard + virtual-pointer: wtype, ydotool-style automation.
 - [ ] Clear the urgent signal after focus
+- [ ] keyboard-shortcuts-inhibit: let VMs, remote desktop and games receive compositor keybindings
+- [ ] pointer-gestures: touchpad pinch and swipe in clients; swipe to switch workspace
+- [ ] Touch and tablet input (`wlr_touch`, tablet-v2)
+- [ ] IPC / control socket (`muwm-msg`) for scripting and bars that need layout and focus info
+- [ ] Scratchpad and sticky windows
+- [ ] Small protocols: xdg-toplevel-icon, xdg-system-bell, alpha-modifier, xdg-toplevel-tag
+- [ ] Animations (optional)
