@@ -327,6 +327,7 @@ private:
     };
     Grab m_grab         = Grab::None;
     Toplevel *m_grabbed = nullptr;
+    bool m_grabWasTiled = false; // the grabbed window was a tile when picked up
     double m_grabX      = 0; // cursor offset (move) or start point (resize)
     double m_grabY      = 0;
     wlr_box m_grabBox   = {}; // floatBox when the grab started

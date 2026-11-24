@@ -2171,9 +2171,11 @@ MuWM::beginGrab(Toplevel *t, bool resize)
 {
     deactivateConstraint(); // a locked pointer couldn't drag
     focusToplevel(t);
+    m_grabWasTiled = !t->floating;
     if (!t->floating)
     {
-        // Pull the tile out of the layout, keeping it where it is.
+        // Pull the tile out of the layout, keeping it where it is. A move puts
+        // it back when it is dropped (see endGrab).
         setFloating(t, true);
         wlr_box geo = t->geometry();
         t->floatBox = {t->tree->node.x, t->tree->node.y, geo.width, geo.height};
@@ -2195,9 +2197,10 @@ MuWM::endGrab()
     Toplevel *t = m_grabbed; // the window that was dragged, not the focused one
     // A tile that was dragged goes back into the layout when it is dropped. A
     // floating window stays where it was dropped.
-    const bool retile = m_grab == Grab::Move && t && !t->floating;
+    const bool retile = m_grab == Grab::Move && t && m_grabWasTiled;
     m_grab            = Grab::None;
     m_grabbed         = nullptr;
+    m_grabWasTiled    = false;
 
     if (!t || !t->workspace || !t->workspace->output)
         return;
@@ -2215,8 +2218,12 @@ MuWM::endGrab()
                 break;
             }
 
-    if (retile && t->workspace)
-        arrange(t->workspace);
+    if (retile)
+    {
+        setFloating(t, false);
+        if (t->workspace)
+            arrange(t->workspace);
+    }
 }
 
 void
