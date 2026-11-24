@@ -622,6 +622,13 @@ MuWM::run(const std::string &startupCmd)
     setenv("WAYLAND_DISPLAY", socket, 1);
     wlr_log(WLR_INFO, "Running on WAYLAND_DISPLAY=%s", socket);
 
+    // Portals, Quickshell and D-Bus activated services look at these to learn
+    // which desktop they are in. Set before the config runs, so spawned
+    // programs inherit them.
+    setenv("XDG_SESSION_TYPE", "wayland", 1);
+    setenv("XDG_CURRENT_DESKTOP", "muwm", 1);
+    setenv("XDG_SESSION_DESKTOP", "muwm", 1);
+
     // The config must be loaded before the backend starts: starting it
     // announces the existing keyboards, whose keymap is built from the config.
     // The socket already exists, so clients spawned by the config can connect.
