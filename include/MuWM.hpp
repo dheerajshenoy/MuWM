@@ -171,6 +171,13 @@ private:
     void onLockNewSurface(void *data);
     void onLockUnlock(void *data);
     void onLockDestroy(void *data);
+    void onActivationRequest(void *data);
+    void onNewConstraint(void *data);
+    void onConstraintDestroy(void *data);
+
+    void updateConstraint(wlr_surface *focus);
+    void deactivateConstraint();
+    bool constrainMotion(double &dx, double &dy); // false = pointer is locked
     void startLock();
     void createLockCover(Output *);
     void layoutLock();
@@ -197,29 +204,37 @@ private:
     void installDefaultBindings();
     const argparse::ArgumentParser &m_parser;
 
-    wl_display *m_display                             = nullptr;
-    wlr_backend *m_backend                            = nullptr;
-    wlr_renderer *m_renderer                          = nullptr;
-    wlr_compositor *m_compositor                          = nullptr;
-    wlr_xwayland *m_xwayland                            = nullptr;
-    wlr_allocator *m_allocator                        = nullptr;
-    wlr_scene *m_scene                                = nullptr;
-    wlr_output_layout *m_layout                       = nullptr;
-    wlr_scene_output_layout *m_sceneLayout            = nullptr;
-    wlr_seat *m_seat                                  = nullptr;
-    wlr_xdg_shell *m_xdgShell                         = nullptr;
-    wlr_cursor *m_cursor                              = nullptr;
-    wlr_xcursor_manager *m_xcursor                    = nullptr;
+    // State
+    wl_display *m_display                  = nullptr;
+    wlr_backend *m_backend                 = nullptr;
+    wlr_renderer *m_renderer               = nullptr;
+    wlr_compositor *m_compositor           = nullptr;
+    wlr_xwayland *m_xwayland               = nullptr;
+    wlr_allocator *m_allocator             = nullptr;
+    wlr_scene *m_scene                     = nullptr;
+    wlr_output_layout *m_layout            = nullptr;
+    wlr_scene_output_layout *m_sceneLayout = nullptr;
+    wlr_seat *m_seat                       = nullptr;
+    wlr_xdg_shell *m_xdgShell              = nullptr;
+    wlr_cursor *m_cursor                   = nullptr;
+    wlr_xcursor_manager *m_xcursor         = nullptr;
+
+    // Protocols
     wlr_xdg_decoration_manager_v1 *m_decoManager      = nullptr;
     wlr_layer_shell_v1 *m_layerShell                  = nullptr;
     wlr_output_manager_v1 *m_outputManager            = nullptr;
     wlr_cursor_shape_manager_v1 *m_cursorShapeManager = nullptr;
     wlr_ext_foreign_toplevel_list_v1 *m_foreignList   = nullptr;
     wlr_session_lock_manager_v1 *m_lockManager        = nullptr;
-    wlr_session_lock_v1 *m_lock = nullptr; // the live locker, if any
+    wlr_session_lock_v1 *m_lock                       = nullptr;
     wlr_ext_foreign_toplevel_image_capture_source_manager_v1
-        *m_toplevelCaptureManager = nullptr;
-    Output *m_focusedOutput       = nullptr;
+        *m_toplevelCaptureManager                      = nullptr;
+    wlr_xdg_activation_v1 *m_xdgActivation             = nullptr;
+    wlr_pointer_constraints_v1 *m_constraints          = nullptr;
+    wlr_relative_pointer_manager_v1 *m_relativePointer = nullptr;
+    wlr_pointer_constraint_v1 *m_activeConstraint      = nullptr;
+
+    Output *m_focusedOutput = nullptr;
     std::vector<Output *> m_outputs;
     std::vector<Keyboard *> m_keyboards;
     std::vector<Pointer *> m_pointers;
@@ -252,6 +267,9 @@ private:
     Listener<MuWM> m_lockNewSurface;
     Listener<MuWM> m_lockUnlock;
     Listener<MuWM> m_lockDestroy;
+    Listener<MuWM> m_activationRequest;
+    Listener<MuWM> m_newConstraint;
+    Listener<MuWM> m_constraintDestroy;
 
     // Super+drag: left button moves a window, right button resizes it.
     enum class Grab
@@ -269,7 +287,7 @@ private:
     Config m_config;
     std::vector<LayerShellSurface *> m_layerSurfaces;
     // An X11 menu that asked for the keyboard; it keeps it until it closes.
-    XUnmanaged *m_focusedUnmanaged = nullptr;
+    XUnmanaged *m_focusedUnmanaged    = nullptr;
     LayerShellSurface *m_focusedLayer = nullptr; // holds the keyboard, if any
 
     // Stacking order, bottom to top: background, bottom, windows, top, overlay.

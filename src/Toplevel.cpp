@@ -64,6 +64,16 @@ Toplevel::onCommit(void *)
         setTiled(
             !floating); // tell the client its edges are held by the compositor
     }
+
+    // A client may change its min/max size at any time. Re-lay out so the
+    // window is clamped to the new limits.
+    const auto &c = xdg->current;
+    const SizeLimits now{c.min_width, c.min_height, c.max_width, c.max_height};
+    if (now == limits)
+        return;
+    limits = now;
+    if (workspace) // set once the window is mapped
+        wm->arrange(workspace);
 }
 
 void

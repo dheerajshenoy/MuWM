@@ -31,6 +31,14 @@ struct Toplevel
     bool fullscreen                                   = false;
     bool floating                                     = false;
 
+    // The size limits seen at the last commit, to notice when a client changes
+    // them after mapping.
+    struct SizeLimits
+    {
+        int minW = 0, minH = 0, maxW = 0, maxH = 0;
+        bool operator==(const SizeLimits &) const = default;
+    } limits;
+
     void onMap(void *data);
     void onUnmap(void *data);
     void onCommit(void *data);

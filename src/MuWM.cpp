@@ -278,6 +278,15 @@ MuWM::init()
     m_outputTest.bind<&MuWM::onOutputManagerTest>(&m_outputManager->events.test,
                                                   this);
 
+    m_xdgActivation = wlr_xdg_activation_v1_create(m_display);
+    m_activationRequest.bind<&MuWM::onActivationRequest>(
+        &m_xdgActivation->events.request_activate, this);
+
+    m_relativePointer = wlr_relative_pointer_manager_v1_create(m_display);
+    m_constraints     = wlr_pointer_constraints_v1_create(m_display);
+    m_newConstraint.bind<&MuWM::onNewConstraint>(
+        &m_constraints->events.new_constraint, this);
+
     // Lazy: Xwayland only starts when the first X11 client connects.
     m_xwayland = wlr_xwayland_create(m_display, m_compositor, true);
     if (m_xwayland)
@@ -1082,10 +1091,13 @@ MuWM::processMotion(uint32_t timeMsec)
     // have a surface under the pointer but no Toplevel.
     if (!surface)
     {
+        updateConstraint(nullptr);
         wlr_cursor_set_xcursor(m_cursor, m_xcursor, "default");
         wlr_seat_pointer_clear_focus(m_seat);
         return;
     }
+
+    updateConstraint(surface);
     wlr_seat_pointer_notify_enter(m_seat, surface, sx, sy);
     wlr_seat_pointer_notify_motion(m_seat, timeMsec, sx, sy);
 }
@@ -1094,7 +1106,20 @@ void
 MuWM::onCursorMotion(void *data)
 {
     auto *ev = static_cast<wlr_pointer_motion_event *>(data);
-    wlr_cursor_move(m_cursor, &ev->pointer->base, ev->delta_x, ev->delta_y);
+    wlr_relative_pointer_manager_v1_send_relative_motion(
+        m_relativePointer, m_seat, uint64_t(ev->time_msec) * 1000, ev->delta_x,
+        ev->delta_y, ev->unaccel_dx, ev->unaccel_dy);
+
+    double dx = ev->delta_x, dy = ev->delta_y;
+    if (!constrainMotion(dx, dy))
+    {
+        // Locked: the client gets relative motion only. Release the lock if
+        // its window lost keyboard focus meanwhile.
+        if (m_activeConstraint->surface != m_seat->keyboard_state.focused_surface)
+            deactivateConstraint();
+        return;
+    }
+    wlr_cursor_move(m_cursor, &ev->pointer->base, dx, dy);
     processMotion(ev->time_msec);
 }
 
@@ -1846,6 +1871,7 @@ MuWM::raiseFloaters(Workspace *ws)
 void
 MuWM::beginGrab(Toplevel *t, bool resize)
 {
+    deactivateConstraint(); // a locked pointer couldn't drag
     focusToplevel(t);
     if (!t->floating)
     {
@@ -2001,6 +2027,7 @@ MuWM::onNewLock(void *data)
 void
 MuWM::startLock()
 {
+    deactivateConstraint(); // the cursor must be free to reach the lock surface
     m_locked  = true;
     m_grab    = Grab::None; // drop any move/resize in progress
     m_grabbed = nullptr;
@@ -2319,4 +2346,116 @@ MuWM::releaseUnmanagedFocus(XUnmanaged *u)
         wlr_xwayland_surface_activate(u->xsurface, false);
     if (!m_locked)
         restoreKeyboardFocus(); // layer surface, window, or nothing
+}
+
+void
+MuWM::onActivationRequest(void *data)
+{
+    auto *ev
+        = static_cast<wlr_xdg_activation_v1_request_activate_event *>(data);
+
+    Toplevel *target = nullptr;
+    for (Output *o : m_outputs)
+        for (Workspace *ws : o->workspaces)
+            for (Toplevel *t : ws->toplevels)
+                if (t->surface() == ev->surface)
+                    target = t;
+    if (!target)
+        return;
+
+    // Anti focus-stealing: only honour tokens requested by the window that has
+    // focus right now. Anything else should only be marked as urgent.
+    wlr_surface *focused = m_seat->keyboard_state.focused_surface;
+    if (ev->token->surface && ev->token->surface != focused)
+        return; // TODO: urgent border instead of ignoring
+
+    if (target->workspace && target->workspace->output
+        && target->workspace != target->workspace->output->workspace)
+        switchWorkspace(target->workspace->output, target->workspace);
+    focusToplevel(target);
+}
+
+void
+MuWM::onNewConstraint(void *data)
+{
+    auto *c = static_cast<wlr_pointer_constraint_v1 *>(data);
+    if (c->surface == m_seat->pointer_state.focused_surface)
+        updateConstraint(c->surface);
+}
+
+void
+MuWM::updateConstraint(wlr_surface *focus)
+{
+    // A window under the cursor must not lock the pointer unless it also has
+    // keyboard focus.
+    if (focus != m_seat->keyboard_state.focused_surface)
+        focus = nullptr;
+    wlr_pointer_constraint_v1 *c
+        = focus ? wlr_pointer_constraints_v1_constraint_for_surface(
+                      m_constraints, focus, m_seat)
+                : nullptr;
+    if (c == m_activeConstraint)
+        return;
+
+    deactivateConstraint();
+    if (!c)
+        return;
+
+    m_activeConstraint = c;
+    m_constraintDestroy.bind<&MuWM::onConstraintDestroy>(&c->events.destroy,
+                                                         this);
+    wlr_pointer_constraint_v1_send_activated(c);
+}
+
+void
+MuWM::deactivateConstraint()
+{
+    wlr_pointer_constraint_v1 *c = m_activeConstraint;
+    if (!c)
+        return;
+    m_activeConstraint = nullptr;
+    m_constraintDestroy.unbind();
+
+    // Put the cursor where the client says it was, so it doesn't jump.
+    if (c->current.committed & WLR_POINTER_CONSTRAINT_V1_STATE_CURSOR_HINT)
+    {
+        wlr_surface *s = nullptr;
+        double sx = 0, sy = 0;
+        if (toplevelAt(m_cursor->x, m_cursor->y, &s, &sx, &sy)
+            && s == c->surface)
+            wlr_cursor_warp(m_cursor, nullptr,
+                            m_cursor->x - sx + c->current.cursor_hint.x,
+                            m_cursor->y - sy + c->current.cursor_hint.y);
+    }
+    wlr_pointer_constraint_v1_send_deactivated(c);
+}
+
+void
+MuWM::onConstraintDestroy(void *)
+{
+    m_activeConstraint = nullptr; // wlroots frees it; don't send deactivated
+    m_constraintDestroy.unbind();
+}
+
+bool
+MuWM::constrainMotion(double &dx, double &dy)
+{
+    wlr_pointer_constraint_v1 *c = m_activeConstraint;
+    if (!c)
+        return true;
+    if (c->type == WLR_POINTER_CONSTRAINT_V1_LOCKED)
+        return false;
+
+    // Confined: stop at the edge of the allowed region.
+    wlr_surface *s = nullptr;
+    double sx = 0, sy = 0;
+    if (!toplevelAt(m_cursor->x, m_cursor->y, &s, &sx, &sy) || s != c->surface)
+        return true;
+    double nx, ny;
+    if (wlr_region_confine(&c->region, sx, sy, sx + dx, sy + dy, &nx, &ny))
+    {
+        dx = nx - sx;
+        dy = ny - sy;
+    }
+    return true;
 }
