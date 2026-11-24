@@ -927,28 +927,28 @@ MuWM::initLuaBindings()
 
     // lua ---@class mu.opts.border
     borderGroup.fields = {
-        // lua ---@field width integer Border width in pixels. Must be between 0
+        // lua ---@field width? integer Border width in pixels. Must be between 0
         // and 1000.
         intField("width", &bd.width, 0, 1000, MuWM::ChangeLayout),
 
-        // lua ---@field focused mu.Color Border color for the focused window.
+        // lua ---@field focused? mu.Color Border color for the focused window.
         colorField("focused", bd.focused_color, MuWM::ChangeRecolor),
 
-        // lua ---@field unfocused mu.Color Border color for unfocused windows.
+        // lua ---@field unfocused? mu.Color Border color for unfocused windows.
         colorField("unfocused", bd.unfocused_color, MuWM::ChangeRecolor),
 
-        // lua ---@field smart boolean Whether to hide borders when only one
+        // lua ---@field smart? boolean Whether to hide borders when only one
         // window is visible.
         boolField("smart", &bd.smart, MuWM::ChangeLayout),
 
-        // lua ---@field fullscreen boolean Whether to draw a border around
+        // lua ---@field fullscreen? boolean Whether to draw a border around
         // fullscreen windows.
         boolField("fullscreen", &bd.fullscreen, MuWM::ChangeLayout),
     };
 
     // lua ---@class mu.opts.layout
     layoutGroup.fields = {
-        // lua ---@field master_ratio number The ratio of the master area to the
+        // lua ---@field master_ratio? number The ratio of the master area to the
         // whole screen. Must be between 0 and 1.
         floatField("master_ratio", &m_config.layout.master_ratio,
                    MuWM::ChangeLayout, 0.0f, 1.0f),
@@ -957,28 +957,28 @@ MuWM::initLuaBindings()
 
     // lua ---@class mu.opts.keyboard
     keyboardGroup.fields = {
-        // lua ---@field rules string XKB rules file name.
+        // lua ---@field rules? string XKB rules file name.
         stringField("rules", &kb.rules, MuWM::ChangeKeyboard),
 
-        // lua ---@field model string XKB model name.
+        // lua ---@field model? string XKB model name.
         stringField("model", &kb.model, MuWM::ChangeKeyboard),
 
-        // lua ---@field layout string XKB layout name.
+        // lua ---@field layout? string XKB layout name.
         stringField("layout", &kb.layout, MuWM::ChangeKeyboard),
 
-        // lua ---@field variant string XKB variant name.
+        // lua ---@field variant? string XKB variant name.
         stringField("variant", &kb.variant, MuWM::ChangeKeyboard),
 
-        // lua ---@field xkb_options string XKB options string, e.g.
+        // lua ---@field xkb_options? string XKB options string, e.g.
         // "ctrl:nocaps".
         stringField("xkb_options", &kb.xkb_options, MuWM::ChangeKeyboard),
 
-        // lua ---@field repeat_rate integer Keyboard repeat rate in characters
+        // lua ---@field repeat_rate? integer Keyboard repeat rate in characters
         // per second.
         intField("repeat_rate", &kb.repeat_rate, INT_MIN, INT_MAX,
                  MuWM::ChangeKeyboard),
 
-        // lua ---@field repeat_delay integer Keyboard repeat delay in
+        // lua ---@field repeat_delay? integer Keyboard repeat delay in
         // milliseconds.
         intField("repeat_delay", &kb.repeat_delay, INT_MIN, INT_MAX,
                  MuWM::ChangeKeyboard),
@@ -986,10 +986,10 @@ MuWM::initLuaBindings()
 
     // lua ---@class mu.opts.gaps
     gapsGroup.fields = {
-        // lua ---@field value integer Window gap in pixels.
+        // lua ---@field value? integer Window gap in pixels.
         intField("value", &m_config.gaps.value, 0, 1000, MuWM::ChangeLayout),
 
-        // lua ---@field smart boolean Whether to hide gaps when only one window
+        // lua ---@field smart? boolean Whether to hide gaps when only one window
         // is visible.
         boolField("smart", &m_config.gaps.smart, MuWM::ChangeLayout),
     };
@@ -1034,12 +1034,12 @@ MuWM::initLuaBindings()
 
     // lua ---@class mu.opts.touchpad
     touchpadGroup.fields = {
-        // lua ---@field natural_scroll boolean Whether to enable natural
+        // lua ---@field natural_scroll? boolean Whether to enable natural
         // scrolling on the touchpad.
         boolField("natural_scroll", &m_config.touchpad.natural_scroll,
                   MuWM::ChangePointer),
 
-        // lua ---@field tap_to_click boolean Whether to enable tap-to-click on
+        // lua ---@field tap_to_click? boolean Whether to enable tap-to-click on
         // the touchpad.
         boolField("tap_to_click", &m_config.touchpad.tap_to_click,
                   MuWM::ChangePointer),

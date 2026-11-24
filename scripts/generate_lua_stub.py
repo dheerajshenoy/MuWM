@@ -115,7 +115,7 @@ def parse(text):
             g["class_line"] = first
             current = g
             continue
-        fm = re.match(r"---@field\s+(\w+)\s+(\S+)\s*(.*)$", doc)
+        fm = re.match(r"---@field\s+(\w+)\??\s+(\S+)\s*(.*)$", doc)
         if fm and current:
             name, typ = fm.group(1), fm.group(2)
             current["docs"][name] = (typ, doc, first)

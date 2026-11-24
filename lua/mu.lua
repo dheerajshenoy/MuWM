@@ -27,27 +27,27 @@
 ---@field focused boolean Whether the window had focus.
 
 ---@class mu.opts.border
----@field width integer Border width in pixels. Must be between 0 and 1000.
----@field focused mu.Color Border color for the focused window.
----@field unfocused mu.Color Border color for unfocused windows.
----@field smart boolean Whether to hide borders when only one window is visible.
----@field fullscreen boolean Whether to draw a border around fullscreen windows.
+---@field width? integer Border width in pixels. Must be between 0 and 1000.
+---@field focused? mu.Color Border color for the focused window.
+---@field unfocused? mu.Color Border color for unfocused windows.
+---@field smart? boolean Whether to hide borders when only one window is visible.
+---@field fullscreen? boolean Whether to draw a border around fullscreen windows.
 
 ---@class mu.opts.layout
----@field master_ratio number The ratio of the master area to the whole screen. Must be between 0 and 1.
+---@field master_ratio? number The ratio of the master area to the whole screen. Must be between 0 and 1.
 
 ---@class mu.opts.keyboard
----@field rules string XKB rules file name.
----@field model string XKB model name.
----@field layout string XKB layout name.
----@field variant string XKB variant name.
----@field xkb_options string XKB options string, e.g. "ctrl:nocaps".
----@field repeat_rate integer Keyboard repeat rate in characters per second.
----@field repeat_delay integer Keyboard repeat delay in milliseconds.
+---@field rules? string XKB rules file name.
+---@field model? string XKB model name.
+---@field layout? string XKB layout name.
+---@field variant? string XKB variant name.
+---@field xkb_options? string XKB options string, e.g. "ctrl:nocaps".
+---@field repeat_rate? integer Keyboard repeat rate in characters per second.
+---@field repeat_delay? integer Keyboard repeat delay in milliseconds.
 
 ---@class mu.opts.gaps
----@field value integer Window gap in pixels.
----@field smart boolean Whether to hide gaps when only one window is visible.
+---@field value? integer Window gap in pixels.
+---@field smart? boolean Whether to hide gaps when only one window is visible.
 
 ---@class mu.opts
 ---@field keyboard mu.opts.keyboard Keyboard layout options.
@@ -61,8 +61,8 @@
 ---@field raise_on_focus boolean Whether to raise a window when it is focused.
 
 ---@class mu.opts.touchpad
----@field natural_scroll boolean Whether to enable natural scrolling on the touchpad.
----@field tap_to_click boolean Whether to enable tap-to-click on the touchpad.
+---@field natural_scroll? boolean Whether to enable natural scrolling on the touchpad.
+---@field tap_to_click? boolean Whether to enable tap-to-click on the touchpad.
 
 ---@class mu
 ---@field opts mu.opts User-configurable options.
