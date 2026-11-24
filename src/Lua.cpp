@@ -580,6 +580,22 @@ luaSpawn(lua_State *L)
 
 // clang-format off
 /*lua
+  ---Focus the nearest window in the given direction, or the next output if
+  ---there is none
+  ---@param dir string One of "up", "down", "left", "right"
+  function mu.focus(dir) end
+*/
+// clang-format on
+int
+luaFocus(lua_State *L)
+{
+    wlr_direction dir = checkDirection(L, 1);
+    wmFrom(L)->focus(dir);
+    return 0;
+}
+
+// clang-format off
+/*lua
     ---Focus the next output in the given direction
     ---@param dir string One of "up", "down", "left", "right"
     function mu.focus_output(dir) end
@@ -1065,6 +1081,8 @@ MuWM::initLuaBindings()
 
         // lua ---@field focus_prev fun() Focus the previous window.
         funcField("focus_prev", luaCall<&MuWM::focusPrev>),
+
+        funcField("focus", luaFocus),
 
         funcField("focus_output", luaFocusOutput),
 

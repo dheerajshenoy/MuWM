@@ -1139,10 +1139,11 @@ MuWM::arrange(Workspace *ws)
         return;
     }
 
-    const int masterW = (area.width - gap)
-                        * (ws->masterRatio >= 0.0f ? ws->masterRatio
-                                                   : m_config.layout.master_ratio);
-    const int stackW  = area.width - gap - masterW;
+    const int masterW
+        = (area.width - gap)
+          * (ws->masterRatio >= 0.0f ? ws->masterRatio
+                                     : m_config.layout.master_ratio);
+    const int stackW = area.width - gap - masterW;
     place(tiled[0], area.x, area.y, masterW, area.height, borders);
 
     // Integer division would leave the remainder as empty space under the
@@ -3015,4 +3016,69 @@ MuWM::applyWorkspaces()
         }
     }
     arrange();
+}
+
+void
+MuWM::focus(wlr_direction dir)
+{
+    // Focus next window if it exists, else next output if it exists, else
+    // nothing, in the given direction.
+    if (Toplevel *t = nextToplevel(dir))
+        focusToplevel(t);
+    else
+        focusOutput(dir);
+}
+
+Toplevel *
+MuWM::nextToplevel(wlr_direction dir)
+{
+    Workspace *ws = currentWorkspace();
+    if (!ws)
+        return nullptr;
+
+    Toplevel *t = ws->focusedToplevel;
+    if (!t)
+        return nullptr;
+
+    auto boxOf = [](Toplevel *w)
+    {
+        const wlr_box g = w->geometry();
+        return wlr_box{w->tree->node.x, w->tree->node.y, g.width, g.height};
+    };
+
+    // The nearest window lying entirely in the given direction.
+    const wlr_box a = boxOf(t);
+    Toplevel *next  = nullptr;
+    int best        = 0;
+    for (Toplevel *cand : ws->toplevels)
+    {
+        if (cand == t)
+            continue;
+        const wlr_box b = boxOf(cand);
+        int dist;
+        switch (dir)
+        {
+        case WLR_DIRECTION_LEFT:
+            dist = a.x - (b.x + b.width);
+            break;
+        case WLR_DIRECTION_RIGHT:
+            dist = b.x - (a.x + a.width);
+            break;
+        case WLR_DIRECTION_UP:
+            dist = a.y - (b.y + b.height);
+            break;
+        case WLR_DIRECTION_DOWN:
+            dist = b.y - (a.y + a.height);
+            break;
+        default:
+            continue;
+        }
+        if (dist >= 0 && (!next || dist < best))
+        {
+            next = cand;
+            best = dist;
+        }
+    }
+
+    return next;
 }

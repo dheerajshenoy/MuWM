@@ -66,6 +66,7 @@ public:
 
     void focusNext();
     void focusPrev();
+    void focus(wlr_direction dir);
     void swapNext();
     void swapPrev();
     void swapMaster();
@@ -226,6 +227,7 @@ private:
     Workspace *createWorkspace(Output *o, const std::string &name,
                                size_t index);
     void applyWorkspaces();
+    Toplevel* nextToplevel(wlr_direction dir);
 
 private:
     bool m_ok = false;
@@ -322,7 +324,7 @@ private:
     Grab m_grab         = Grab::None;
     Toplevel *m_grabbed = nullptr;
     bool m_grabWasTiled = false; // the grabbed window was a tile when picked up
-    double m_grabX      = 0; // cursor offset (move) or start point (resize)
+    double m_grabX      = 0;     // cursor offset (move) or start point (resize)
     double m_grabY      = 0;
     wlr_box m_grabBox   = {}; // floatBox when the grab started
 
