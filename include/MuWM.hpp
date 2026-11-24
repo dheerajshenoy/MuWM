@@ -39,7 +39,7 @@ public:
     bool run(const std::string &startupCmd = {});
     void handleNewToplevel(wlr_xdg_toplevel *xdg);
     void handleNewInput(wlr_input_device *device);
-    void focusToplevel(Toplevel *t);
+    void focusToplevel(Toplevel *t, bool raise = false);
     WindowInfo windowInfo(const Toplevel *t) const;
     void addToplevel(Toplevel *t);
     void removeToplevel(Toplevel *t);
@@ -132,7 +132,7 @@ public:
 
     Toplevel *toplevelAt(double x, double y, wlr_surface **surface, double *sx,
                          double *sy);
-    void processMotion(uint32_t timeMsec);
+    void processMotion(uint32_t timeMsec, bool allowFocus = true);
     void spawn(const std::string &cmd);
     void addBinding(Binding b);
     void clearBindings();

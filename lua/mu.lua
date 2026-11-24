@@ -57,6 +57,8 @@
 ---@field layout mu.opts.layout Layout options.
 ---@field new_client_position mu.NewClientPosition Where a new window is inserted in the layout.
 ---@field workspaces string[] Workspace names; their number is the workspace count.
+---@field focus_follows_mouse boolean Whether to focus a window when the mouse enters it.
+---@field raise_on_focus boolean Whether to raise a window when it is focused.
 
 ---@class mu.opts.touchpad
 ---@field natural_scroll boolean Whether to enable natural scrolling on the touchpad.

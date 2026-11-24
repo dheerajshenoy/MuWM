@@ -873,7 +873,7 @@ MuWM::currentWorkspace()
 }
 
 void
-MuWM::focusToplevel(Toplevel *t)
+MuWM::focusToplevel(Toplevel *t, bool raise)
 {
     Toplevel *oldFocus = focusedToplevel();
 
@@ -905,7 +905,9 @@ MuWM::focusToplevel(Toplevel *t)
         if (other != t && other->fullscreen)
             setFullscreen(other, false);
 
-    wlr_scene_node_raise_to_top(&t->tree->node);
+    if (raise)
+        wlr_scene_node_raise_to_top(&t->tree->node);
+
     if (!t->floating)
         raiseFloaters(ws); // a focused tile must not cover floating windows
     if (m_focusedLayer || m_focusedUnmanaged || m_locked)
@@ -1179,7 +1181,7 @@ MuWM::toplevelAt(double x, double y, wlr_surface **surface, double *sx,
 }
 
 void
-MuWM::processMotion(uint32_t timeMsec)
+MuWM::processMotion(uint32_t timeMsec, bool allowFocus)
 {
     if (m_locked)
     {
@@ -1220,7 +1222,10 @@ MuWM::processMotion(uint32_t timeMsec)
 
     wlr_surface *surface = nullptr;
     double sx = 0, sy = 0;
-    toplevelAt(m_cursor->x, m_cursor->y, &surface, &sx, &sy);
+    Toplevel *t = toplevelAt(m_cursor->x, m_cursor->y, &surface, &sx, &sy);
+
+    if (m_config.focus_follows_mouse && t && t != focusedToplevel())
+        focusToplevel(t, allowFocus);
 
     // Judge by the surface, not the window: X11 menus and layer-shell surfaces
     // have a surface under the pointer but no Toplevel.
@@ -2628,7 +2633,8 @@ MuWM::refreshPointerFocus()
     timespec now;
     clock_gettime(CLOCK_MONOTONIC, &now);
     processMotion(
-        static_cast<uint32_t>(now.tv_sec * 1000 + now.tv_nsec / 1000000));
+        static_cast<uint32_t>(now.tv_sec * 1000 + now.tv_nsec / 1000000),
+        false);
 }
 
 void

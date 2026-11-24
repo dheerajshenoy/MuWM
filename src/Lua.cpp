@@ -663,7 +663,8 @@ luaWindowToWorkspace(lua_State *L)
     else if (lua_type(L, 1) == LUA_TSTRING)
         wmFrom(L)->windowToWorkspace(lua_tostring(L, 1));
     else
-        return luaL_error(L, "mu.window_to_workspace expects an integer or string");
+        return luaL_error(
+            L, "mu.window_to_workspace expects an integer or string");
     return 0;
 }
 
@@ -1021,6 +1022,13 @@ MuWM::initLuaBindings()
         stringListField("workspaces", &m_config.workspaces,
                         MuWM::ChangeWorkspace),
 
+        // lua ---@field focus_follows_mouse boolean Whether to focus a window
+        // when the mouse enters it.
+        boolField("focus_follows_mouse", &m_config.focus_follows_mouse),
+
+        // lua ---@field raise_on_focus boolean Whether to raise a window when it
+        // is focused.
+        boolField("raise_on_focus", &m_config.raise_on_focus),
     };
     // clang-format on
 

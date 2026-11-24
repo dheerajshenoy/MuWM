@@ -17,9 +17,13 @@ struct Config
 {
     NewClientPosition new_client_position = NewClientPosition::AfterCurrent;
 
-    float scale = 1.0f;
+    float scale              = 1.0f;
+    bool focus_follows_mouse = true;
+    bool mouse_follows_focus = false;
+    bool raise_on_focus      = false;
 
-    std::vector<std::string> workspaces = {"1", "2", "3", "4", "5", "6", "7", "8", "9"};
+    std::vector<std::string> workspaces
+        = {"1", "2", "3", "4", "5", "6", "7", "8", "9"};
 
     struct Gaps
     {
@@ -45,7 +49,7 @@ struct Config
 
     struct TouchpadConfig
     {
-        bool natural_scroll = true;
+        bool natural_scroll = false;
         bool tap_to_click   = true;
     } touchpad;
 
