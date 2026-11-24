@@ -558,7 +558,9 @@ luaFocusWorkspace(lua_State *L)
 
 // clang-format off
 /*lua
- *
+  ---Set the ratio of the master area to the whole screen
+  ---@param ratio number The ratio, between 0 and 1
+  function mu.set_master_ratio(ratio) end
 */
 // clang-format on
 int
@@ -611,6 +613,10 @@ struct LuaRef
 /*lua
   ---A color: "#rrggbb", "#rrggbbaa" or a table {r, g, b, a} (0-1 each).
   ---@alias mu.Color string|number[]
+
+  ---Where a new window is inserted: after or before the focused window, or
+  ---at the top (master) or bottom of the layout.
+  ---@alias mu.NewClientPosition "after_current"|"before_current"|"top"|"bottom"
 
   ---Names accepted by mu.on and mu.once.
   ---@alias mu.Event
@@ -906,25 +912,30 @@ MuWM::initLuaBindings()
         boolField("smart", &m_config.gaps.smart, MuWM::ChangeLayout),
     };
 
+    // clang-format off
     // lua ---@class mu.opts
-    optsGroup.fields
-        = {// lua ---@field keyboard mu.opts.keyboard Keyboard layout options.
-           subField("keyboard", &keyboardGroup),
+    optsGroup.fields = {
+        // lua ---@field keyboard mu.opts.keyboard Keyboard layout options.
+        subField("keyboard", &keyboardGroup),
 
-           // lua ---@field touchpad mu.opts.touchpad Touchpad options.
-           subField("touchpad", &touchpadGroup),
+        // lua ---@field touchpad mu.opts.touchpad Touchpad options.
+        subField("touchpad", &touchpadGroup),
 
-           // lua ---@field gaps mu.opts.gaps Window gap options.
-           subField("gaps", &gapsGroup),
+        // lua ---@field gaps mu.opts.gaps Window gap options.
+        subField("gaps", &gapsGroup),
 
-           // lua ---@field border mu.opts.border Window border options.
-           subField("border", &borderGroup),
+        // lua ---@field border mu.opts.border Window border options.
+        subField("border", &borderGroup),
 
-           // lua ---@field layout mu.opts.layout Layout options.
-           subField("layout", &layoutGroup),
+        // lua ---@field layout mu.opts.layout Layout options.
+        subField("layout", &layoutGroup),
 
-           enumField("new_client_position", &m_config.new_client_position,
-                     &kNewClientPositionNames, MuWM::ChangeLayout)};
+        // lua ---@field new_client_position mu.NewClientPosition Where a new
+        // window is inserted in the layout.
+        enumField("new_client_position", &m_config.new_client_position,
+                  &kNewClientPositionNames, MuWM::ChangeLayout),
+    };
+    // clang-format on
 
     // lua ---@class mu.opts.touchpad
     touchpadGroup.fields = {

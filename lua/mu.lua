@@ -4,6 +4,10 @@
 ---A color: "#rrggbb", "#rrggbbaa" or a table {r, g, b, a} (0-1 each).
 ---@alias mu.Color string|number[]
 
+---Where a new window is inserted: after or before the focused window, or
+---at the top (master) or bottom of the layout.
+---@alias mu.NewClientPosition "after_current"|"before_current"|"top"|"bottom"
+
 ---Names accepted by mu.on and mu.once.
 ---@alias mu.Event
 ---| "startup" # The compositor is up (fires once, not on reload).
@@ -29,6 +33,9 @@
 ---@field smart boolean Whether to hide borders when only one window is visible.
 ---@field fullscreen boolean Whether to draw a border around fullscreen windows.
 
+---@class mu.opts.layout
+---@field master_ratio number The ratio of the master area to the whole screen. Must be between 0 and 1.
+
 ---@class mu.opts.keyboard
 ---@field rules string XKB rules file name.
 ---@field model string XKB model name.
@@ -47,6 +54,8 @@
 ---@field touchpad mu.opts.touchpad Touchpad options.
 ---@field gaps mu.opts.gaps Window gap options.
 ---@field border mu.opts.border Window border options.
+---@field layout mu.opts.layout Layout options.
+---@field new_client_position mu.NewClientPosition Where a new window is inserted in the layout.
 
 ---@class mu.opts.touchpad
 ---@field natural_scroll boolean Whether to enable natural scrolling on the touchpad.
@@ -55,6 +64,7 @@
 ---@class mu
 ---@field opts mu.opts User-configurable options.
 ---@field toggle_fullscreen fun() Toggle fullscreen for the focused window.
+---@field toggle_floating fun() Toggle floating for the focused window.
 ---@field focus_next fun() Focus the next window.
 ---@field focus_prev fun() Focus the previous window.
 ---@field swap_next fun() Swap the focused window with the next window.
@@ -77,9 +87,21 @@ function mu.keybind(spec, handler) end
 ---@param cmd string The command to run
 function mu.spawn(cmd) end
 
+---Focus the next output in the given direction
+---@param dir string One of "up", "down", "left", "right"
+function mu.focus_output(dir) end
+
+---Move the focused window to the output in the given direction
+---@param dir string One of "up", "down", "left", "right"
+function mu.move_to_output(dir) end
+
 ---Focus a workspace by index
 ---@param index integer The workspace index to focus
 function mu.focus_workspace(index) end
+
+---Set the ratio of the master area to the whole screen
+---@param ratio number The ratio, between 0 and 1
+function mu.set_master_ratio(ratio) end
 
 ---Move the focused window to a workspace by index
 ---@param index integer The workspace index to move the window to
