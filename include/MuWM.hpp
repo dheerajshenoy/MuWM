@@ -189,6 +189,7 @@ private:
     void onWorkspaceCommit(void *data);
     void onSessionActive(void *data);
     void onNewInhibitor(void *data);
+    void onOutputPowerSetMode(void *data);
 
     void updateConstraint(wlr_surface *focus);
     void deactivateConstraint();
@@ -255,6 +256,7 @@ private:
     wlr_linux_dmabuf_v1 *m_dmabuf                             = nullptr;
     wlr_idle_notifier_v1 *m_idleNotifier                      = nullptr;
     wlr_idle_inhibit_manager_v1 *m_idleInhibit                = nullptr;
+    wlr_output_power_manager_v1 *m_outputPower                = nullptr;
 
     Output *m_focusedOutput = nullptr;
     std::vector<Output *> m_outputs;
@@ -295,6 +297,7 @@ private:
     Listener<MuWM> m_workspaceCommit;
     Listener<MuWM> m_sessionActive;
     Listener<MuWM> m_newInhibitor;
+    Listener<MuWM> m_outputPowerSetMode;
 
     // Super+drag: left button moves a window, right button resizes it.
     enum class Grab

@@ -322,6 +322,10 @@ MuWM::init()
     m_newInhibitor.bind<&MuWM::onNewInhibitor>(
         &m_idleInhibit->events.new_inhibitor, this);
 
+    m_outputPower = wlr_output_power_manager_v1_create(m_display);
+    m_outputPowerSetMode.bind<&MuWM::onOutputPowerSetMode>(
+        &m_outputPower->events.set_mode, this);
+
     // Lazy: Xwayland only starts when the first X11 client connects.
     m_xwayland = wlr_xwayland_create(m_display, m_compositor, true);
     if (m_xwayland)
@@ -2674,4 +2678,23 @@ MuWM::updateIdleInhibit(const wlr_idle_inhibitor_v1 *ignore)
         inhibit = inhibit || visible;
     }
     wlr_idle_notifier_v1_set_inhibited(m_idleNotifier, inhibit);
+}
+
+void
+MuWM::onOutputPowerSetMode(void *data)
+{
+    auto *ev = static_cast<wlr_output_power_v1_set_mode_event *>(data);
+
+    const bool enable = ev->mode == ZWLR_OUTPUT_POWER_V1_MODE_ON;
+    if (ev->output->enabled == enable)
+        return;
+
+    wlr_output_state state;
+    wlr_output_state_init(&state);
+    wlr_output_state_set_enabled(&state, enable);
+    wlr_output_commit_state(ev->output, &state);
+    wlr_output_state_finish(&state);
+
+    if (enable)
+        wlr_output_schedule_frame(ev->output); // restart the frame loop
 }

@@ -54,6 +54,7 @@ add_protocol(${WAYLAND_PROTOCOLS_DIR}/unstable/xdg-decoration/xdg-decoration-uns
 # add_protocol(${WAYLAND_PROTOCOLS_DIR}/staging/ext-image-copy-capture/ext-image-copy-capture-unstable-v1.xml)
 # Not part of wayland-protocols; vendored from wlr-protocols.
 add_protocol(${CMAKE_CURRENT_SOURCE_DIR}/protocols/wlr-layer-shell-unstable-v1.xml)
+add_protocol(${CMAKE_CURRENT_SOURCE_DIR}/protocols/wlr-output-power-management-unstable-v1.xml)
 
 # --- muwm ----------------------------------------------------------------------
 
