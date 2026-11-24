@@ -64,7 +64,6 @@ public:
     void updateIdleInhibit(const wlr_idle_inhibitor_v1 *ignore = nullptr);
     bool wantsTearing(const Output *) const;
 
-    // Window
     void focusNext();
     void focusPrev();
     void swapNext();
@@ -105,7 +104,6 @@ public:
     void removeKeyboard(Keyboard *keyboard);
     void removePointer(Pointer *pointer);
 
-    // layer-shell
     void arrangeLayers(wlr_output *output);
     void moveLayerSurface(LayerShellSurface *s);
     void focusLayerSurface(LayerShellSurface *s);
@@ -168,7 +166,6 @@ private:
     bool init();
     void handleNewOutput(wlr_output *output);
 
-    // Event handlers
     void onNewToplevel(void *data);
     void onNewInput(void *data);
     void onCursorMotion(void *data);
@@ -236,7 +233,6 @@ private:
     void installDefaultBindings();
     const argparse::ArgumentParser &m_parser;
 
-    // State
     wl_display *m_display                  = nullptr;
     wlr_backend *m_backend                 = nullptr;
     wlr_renderer *m_renderer               = nullptr;
@@ -251,7 +247,6 @@ private:
     wlr_cursor *m_cursor                   = nullptr;
     wlr_xcursor_manager *m_xcursor         = nullptr;
 
-    // Protocols
     wlr_xdg_decoration_manager_v1 *m_decoManager      = nullptr;
     wlr_layer_shell_v1 *m_layerShell                  = nullptr;
     wlr_output_manager_v1 *m_outputManager            = nullptr;
@@ -285,7 +280,6 @@ private:
 
     OutputListener m_outputListener;
 
-    // Listeners
     Listener<MuWM> m_cursorMotion;
     Listener<MuWM> m_cursorMotionAbs;
     Listener<MuWM> m_cursorButton;

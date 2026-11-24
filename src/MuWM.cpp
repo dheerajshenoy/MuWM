@@ -257,7 +257,6 @@ MuWM::init()
 
     m_lockTree = wlr_scene_tree_create(&m_scene->tree);
 
-    // protocols creations
     m_compositor = wlr_compositor_create(m_display, 5, m_renderer);
     wlr_subcompositor_create(m_display);
     wlr_xdg_output_manager_v1_create(m_display, m_layout); // bars need it
@@ -289,7 +288,6 @@ MuWM::init()
 
     m_captureRequest.bind<&MuWM::onToplevelCaptureRequest>(
         &m_toplevelCaptureManager->events.new_request, this);
-    // wlr_xdg_decoration_manager_v1_create(m_display);
 
     m_xdgShell = wlr_xdg_shell_create(m_display, 6);
     m_newToplevel.bind<&MuWM::onNewToplevel>(&m_xdgShell->events.new_toplevel,

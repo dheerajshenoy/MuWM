@@ -17,7 +17,6 @@ struct Toplevel
     wlr_box floatBox               = {};
     wlr_foreign_toplevel_handle_v1 *wlrHandle = nullptr; // while mapped
 
-    // Event listeners
     Listener<Toplevel> map;
     Listener<Toplevel> unmap;
     Listener<Toplevel> commit;

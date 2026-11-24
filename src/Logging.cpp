@@ -1,4 +1,3 @@
-// Logging.cpp
 #include "Logging.hpp"
 
 #include <cstdarg>

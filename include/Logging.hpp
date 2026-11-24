@@ -1,5 +1,3 @@
-// Logging.hpp
-
 #pragma once
 #include "wlroots.hpp"
 

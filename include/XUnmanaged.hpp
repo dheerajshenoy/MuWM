@@ -28,5 +28,5 @@ struct XUnmanaged
     void onRequestConfigure(void *data);
     void onSetGeometry(void *data);
 
-    void place(); // move the scene node to where the window asked to be
+    void place();
 };

@@ -6,7 +6,6 @@ enum class EventType
     Shutdown,
     ConfigReload,
 
-    // Window events
     WindowOpen,
     WindowClose,
     WindowFocus,
@@ -17,7 +16,6 @@ enum class EventType
     WindowMaximize,
     WindowFullscreen,
 
-    // Workspace events
     WorkspaceChange,
     WorkspaceAdd,
     WorkspaceRemove,
