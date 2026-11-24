@@ -1231,6 +1231,24 @@ MuWM::toplevelAt(double x, double y, wlr_surface **surface, double *sx,
     return tree ? static_cast<Toplevel *>(tree->node.data) : nullptr;
 }
 
+// Finds the window a surface belongs to. Looks at the root surface, so
+// subsurfaces and popups map to their window. Windows without an output
+// (the unassigned workspace) are not searched.
+Toplevel *
+MuWM::toplevelFromSurface(const wlr_surface *surface)
+{
+    if (!surface)
+        return nullptr;
+    const wlr_surface *root = wlr_surface_get_root_surface(
+        const_cast<wlr_surface *>(surface));
+    for (Output *o : m_outputs)
+        for (Workspace *ws : o->workspaces)
+            for (Toplevel *t : ws->toplevels)
+                if (t->surface() == root)
+                    return t;
+    return nullptr;
+}
+
 void
 MuWM::processMotion(uint32_t timeMsec, bool allowFocus)
 {
@@ -1304,7 +1322,13 @@ MuWM::processMotion(uint32_t timeMsec, bool allowFocus)
     if (!surface)
     {
         updateConstraint(nullptr);
-        wlr_cursor_set_xcursor(m_cursor, m_xcursor, "default");
+        // Over empty space nothing changes the cursor, so set it once instead
+        // of on every motion event.
+        if (!m_cursorIsDefault)
+        {
+            wlr_cursor_set_xcursor(m_cursor, m_xcursor, "default");
+            m_cursorIsDefault = true;
+        }
         wlr_seat_pointer_clear_focus(m_seat);
         return;
     }
@@ -2383,6 +2407,7 @@ MuWM::onCursorShape(void *data)
     {
         wlr_cursor_set_xcursor(m_cursor, m_xcursor,
                                wlr_cursor_shape_v1_name(ev->shape));
+        m_cursorIsDefault = false;
     }
 }
 
@@ -2397,6 +2422,7 @@ MuWM::onRequestSetCursor(void *data)
 
     // A null surface hides the cursor.
     wlr_cursor_set_surface(m_cursor, ev->surface, ev->hotspot_x, ev->hotspot_y);
+    m_cursorIsDefault = false;
 }
 
 // --- Session lock (ext-session-lock-v1) ------------------------------------
@@ -2780,12 +2806,7 @@ MuWM::onActivationRequest(void *data)
     auto *ev
         = static_cast<wlr_xdg_activation_v1_request_activate_event *>(data);
 
-    Toplevel *target = nullptr;
-    for (Output *o : m_outputs)
-        for (Workspace *ws : o->workspaces)
-            for (Toplevel *t : ws->toplevels)
-                if (t->surface() == ev->surface)
-                    target = t;
+    Toplevel *target = toplevelFromSurface(ev->surface);
     if (!target)
         return;
 
@@ -2970,14 +2991,11 @@ MuWM::updateIdleInhibit(const wlr_idle_inhibitor_v1 *ignore)
             continue;
 
         wlr_surface *root = wlr_surface_get_root_surface(inh->surface);
-        bool visible
-            = true; // not a window we manage (a layer surface): count it
-
-        for (Output *o : m_outputs)
-            for (Workspace *ws : o->workspaces)
-                for (Toplevel *t : ws->toplevels)
-                    if (t->surface() == root)
-                        visible = (ws == o->workspace);
+        // Not a window we manage (a layer surface): count it.
+        const Toplevel *t = toplevelFromSurface(root);
+        const bool visible
+            = !t || !t->workspace || !t->workspace->output
+              || t->workspace == t->workspace->output->workspace;
 
         inhibit = inhibit || visible;
     }

@@ -132,6 +132,7 @@ public:
 
     Toplevel *toplevelAt(double x, double y, wlr_surface **surface, double *sx,
                          double *sy);
+    Toplevel *toplevelFromSurface(const wlr_surface *surface);
     void processMotion(uint32_t timeMsec, bool allowFocus = true);
     void spawn(const std::string &cmd);
     void addBinding(Binding b);
@@ -252,6 +253,7 @@ private:
     wlr_xdg_shell *m_xdgShell              = nullptr;
     wlr_cursor *m_cursor                   = nullptr;
     wlr_xcursor_manager *m_xcursor         = nullptr;
+    bool m_cursorIsDefault                 = false; // skip redundant resets
 
     wlr_xdg_decoration_manager_v1 *m_decoManager      = nullptr;
     wlr_layer_shell_v1 *m_layerShell                  = nullptr;

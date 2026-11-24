@@ -5,6 +5,13 @@ set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# Plain `cmake -B build` would otherwise build with no optimization at all.
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+endif()
+
+option(MUWM_SANITIZE "Build with AddressSanitizer and UBSan" OFF)
+
 find_package(PkgConfig REQUIRED)
 
 pkg_check_modules(DEPS REQUIRED IMPORTED_TARGET
@@ -97,7 +104,19 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
 
 target_compile_options(${PROJECT_NAME} PRIVATE
     -Wall -Wextra
+    $<$<CONFIG:Release>:-O2>
+    $<$<CONFIG:RelWithDebInfo>:-O2>
 )
+
+# Cache the heavy wlroots includes once instead of in every source file.
+target_precompile_headers(${PROJECT_NAME} PRIVATE include/wlroots.hpp)
+
+# cmake -B build-asan -DCMAKE_BUILD_TYPE=Debug -DMUWM_SANITIZE=ON
+if(MUWM_SANITIZE)
+    target_compile_options(${PROJECT_NAME} PRIVATE
+        -fsanitize=address,undefined -fno-omit-frame-pointer)
+    target_link_options(${PROJECT_NAME} PRIVATE -fsanitize=address,undefined)
+endif()
 
 # --- Lua stubs -----------------------------------------------------------------
 # lua/mu.lua (LuaLS stubs for editors) is generated from the doc comments in
