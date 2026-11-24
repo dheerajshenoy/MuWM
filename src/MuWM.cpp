@@ -13,9 +13,44 @@
 
 #include <algorithm>
 #include <csignal>
+#include <cstring>
 #include <linux/input-event-codes.h>
 #include <sys/wait.h>
 #include <unistd.h>
+
+namespace
+{
+bool
+isPrivilegedGlobal(const char *name)
+{
+    static const char *blocked[] = {
+        "zwlr_screencopy_manager_v1",
+        "ext_image_copy_capture_manager_v1",
+        "ext_output_image_capture_source_manager_v1",
+        "ext_foreign_toplevel_image_capture_source_manager_v1",
+        "zwlr_foreign_toplevel_manager_v1",
+        "ext_foreign_toplevel_list_v1",
+        "zwlr_data_control_manager_v1",
+        "ext_data_control_manager_v1",
+        "zwlr_output_manager_v1",
+        "zwlr_output_power_manager_v1",
+        "zwlr_gamma_control_manager_v1",
+        "ext_session_lock_manager_v1",
+        "zwlr_layer_shell_v1",
+        "ext_workspace_manager_v1",
+        "zwp_virtual_keyboard_manager_v1", // when you add them
+        "zwlr_virtual_pointer_manager_v1",
+        // A sandboxed client must not make new security contexts (to get a
+        // fresh, unrestricted-looking socket) or act as the X server.
+        "wp_security_context_manager_v1",
+        "xwayland_shell_v1",
+    };
+    for (const char *b : blocked)
+        if (!strcmp(name, b))
+            return true;
+    return false;
+}
+} // namespace
 
 MuWM::MuWM(const argparse::ArgumentParser &parser) : m_parser(parser)
 {
@@ -335,6 +370,23 @@ MuWM::init()
     m_contentType = wlr_content_type_manager_v1_create(m_display, 1);
 
     m_tearing = wlr_tearing_control_manager_v1_create(m_display, 1);
+
+    m_securityContext = wlr_security_context_manager_v1_create(m_display);
+
+    wl_display_set_global_filter(
+        m_display,
+        [](const wl_client *client, const wl_global *global, void *data) -> bool
+    {
+        auto *wm = static_cast<MuWM *>(data);
+
+        // Normal clients see every global.
+        if (!wlr_security_context_manager_v1_lookup_client(
+                wm->securityContext(), client))
+            return true;
+
+        // Sandboxed clients don't see the privileged ones.
+        return !isPrivilegedGlobal(wl_global_get_interface(global)->name);
+    }, this);
 
     // Lazy: Xwayland only starts when the first X11 client connects.
     m_xwayland = wlr_xwayland_create(m_display, m_compositor, true);

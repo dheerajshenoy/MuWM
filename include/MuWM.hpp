@@ -154,6 +154,11 @@ public:
         return m_foreignToplevelManager;
     }
 
+    wlr_security_context_manager_v1 *securityContext() const
+    {
+        return m_securityContext;
+    }
+
 private:
     bool init();
     void handleNewOutput(wlr_output *output);
@@ -202,7 +207,6 @@ private:
     void focusLockSurface();
     void checkLockReady();
     void restoreKeyboardFocus();
-
     void initLua();
     void initLuaBindings();
     void cycleWorkspace(int delta);
@@ -261,6 +265,7 @@ private:
     wlr_gamma_control_manager_v1 *m_gammaControl              = nullptr;
     wlr_content_type_manager_v1 *m_contentType                = nullptr;
     wlr_tearing_control_manager_v1 *m_tearing                 = nullptr;
+    wlr_security_context_manager_v1 *m_securityContext        = nullptr;
 
     Output *m_focusedOutput = nullptr;
     std::vector<Output *> m_outputs;
