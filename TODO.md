@@ -27,3 +27,6 @@ Tiling Wayland compositor in C++ on wlroots (CMake).
 - [ ] Check that the name `muwm` is free on GitHub and the AUR
 - [ ] AUR PKGBUILD; decide which wlroots version to depend on (the API changes between releases)
 - [ ] CI build
+- [ ] text-input-v3 + input-method-v2: IME support, e.g. fcitx.
+- [ ] virtual-keyboard + virtual-pointer: wtype, ydotool-style automation.
+- [ ] security-context-v1: restricts what sandboxed Flatpak apps can access.
