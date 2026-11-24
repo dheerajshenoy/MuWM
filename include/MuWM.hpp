@@ -146,6 +146,8 @@ public:
 private:
     bool init();
     void handleNewOutput(wlr_output *output);
+
+    // Event handlers
     void onNewToplevel(void *data);
     void onNewInput(void *data);
     void onCursorMotion(void *data);
@@ -174,6 +176,7 @@ private:
     void onActivationRequest(void *data);
     void onNewConstraint(void *data);
     void onConstraintDestroy(void *data);
+    void onWorkspaceCommit(void *data);
 
     void updateConstraint(wlr_surface *focus);
     void deactivateConstraint();
@@ -230,6 +233,7 @@ private:
     wlr_ext_foreign_toplevel_image_capture_source_manager_v1
         *m_toplevelCaptureManager                      = nullptr;
     wlr_xdg_activation_v1 *m_xdgActivation             = nullptr;
+    wlr_ext_workspace_manager_v1 *m_workspaceManager   = nullptr;
     wlr_pointer_constraints_v1 *m_constraints          = nullptr;
     wlr_relative_pointer_manager_v1 *m_relativePointer = nullptr;
     wlr_pointer_constraint_v1 *m_activeConstraint      = nullptr;
@@ -270,6 +274,7 @@ private:
     Listener<MuWM> m_activationRequest;
     Listener<MuWM> m_newConstraint;
     Listener<MuWM> m_constraintDestroy;
+    Listener<MuWM> m_workspaceCommit;
 
     // Super+drag: left button moves a window, right button resizes it.
     enum class Grab

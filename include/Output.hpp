@@ -20,8 +20,8 @@ struct Output
     Listener<Output> destroy;
     Listener<Output> requestState;
     std::vector<Workspace *> workspaces;
-    Workspace *workspace = nullptr;
-
+    Workspace *workspace                     = nullptr;
+    wlr_ext_workspace_group_handle_v1 *group = nullptr;
     void onFrame(void *data);
     void onDestroy(void *data);
     void onRequestState(void *data);

@@ -8,10 +8,10 @@
 
 struct Workspace
 {
-    Output *output            = nullptr;
-    Toplevel *focusedToplevel = nullptr;
-    wlr_scene_tree *sceneTree = nullptr; // parent of this workspace
-
+    Output *output                      = nullptr;
+    Toplevel *focusedToplevel           = nullptr;
+    wlr_scene_tree *sceneTree           = nullptr; // parent of this workspace
+    wlr_ext_workspace_handle_v1 *handle = nullptr;
     std::vector<Toplevel *> focusHistory; // most recent last
     std::vector<Toplevel *> toplevels;
     std::string name;

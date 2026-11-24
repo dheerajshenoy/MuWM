@@ -25,11 +25,25 @@ Output::onDestroy(void *)
     for (Workspace *ws : workspaces)
     {
         if (ws->sceneTree)
+        {
             wlr_scene_node_destroy(&ws->sceneTree->node);
+        }
+        if (ws->handle)
+        {
+            wlr_ext_workspace_handle_v1_destroy(ws->handle);
+            ws->handle = nullptr;
+        }
         delete ws;
     }
+
+    if (group)
+    {
+        wlr_ext_workspace_group_handle_v1_destroy(group);
+        group = nullptr;
+    }
+
     workspaces.clear();
-    workspace = nullptr;
+    workspace    = nullptr;
     output->data = nullptr;
     frame.unbind();
     requestState.unbind();

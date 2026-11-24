@@ -203,6 +203,10 @@ MuWM::init()
     wlr_data_control_manager_v1_create(m_display);
     wlr_viewporter_create(m_display);
     wlr_fractional_scale_manager_v1_create(m_display, 1);
+    m_workspaceManager = wlr_ext_workspace_manager_v1_create(m_display, 1);
+
+    m_workspaceCommit.bind<&MuWM::onWorkspaceCommit>(
+        &m_workspaceManager->events.commit, this);
 
     m_lockManager = wlr_session_lock_manager_v1_create(m_display);
     m_newLock.bind<&MuWM::onNewLock>(&m_lockManager->events.new_lock, this);
@@ -343,6 +347,32 @@ MuWM::handleNewOutput(wlr_output *output)
     }
 
     o->workspace = o->workspaces[0];
+
+    // The workspace group is a handle that clients can use to find all the
+    // workspaces on this output.
+    o->group = wlr_ext_workspace_group_handle_v1_create(m_workspaceManager, 0);
+    wlr_ext_workspace_group_handle_v1_output_enter(o->group, output);
+
+    for (Workspace *w : o->workspaces)
+    {
+        // The id must be unique for the compositor's lifetime, so include the
+        // output.
+        const std::string id = std::string(output->name) + "-" + w->name;
+
+        w->handle = wlr_ext_workspace_handle_v1_create(
+            m_workspaceManager, id.c_str(),
+            EXT_WORKSPACE_HANDLE_V1_WORKSPACE_CAPABILITIES_ACTIVATE);
+        w->handle->data = w;
+        wlr_ext_workspace_handle_v1_set_name(w->handle, w->name.c_str());
+        wlr_ext_workspace_handle_v1_set_group(w->handle, o->group);
+
+        const uint32_t coord
+            = std::stoi(w->name) - 1; // optional: lets bars sort them
+        wlr_ext_workspace_handle_v1_set_coordinates(w->handle, &coord, 1);
+    }
+
+    wlr_ext_workspace_handle_v1_set_active(o->workspace->handle, true);
+
     m_outputs.push_back(o);
     if (!m_focusedOutput)
         m_focusedOutput = o;
@@ -1115,7 +1145,8 @@ MuWM::onCursorMotion(void *data)
     {
         // Locked: the client gets relative motion only. Release the lock if
         // its window lost keyboard focus meanwhile.
-        if (m_activeConstraint->surface != m_seat->keyboard_state.focused_surface)
+        if (m_activeConstraint->surface
+            != m_seat->keyboard_state.focused_surface)
             deactivateConstraint();
         return;
     }
@@ -1408,7 +1439,7 @@ MuWM::arrangeLayers(wlr_output *wlrOutput)
                 wlr_scene_layer_surface_v1_configure(s->scene, &full, &usable);
             }
 
-    const wlr_box old = output->usableArea;
+    const wlr_box old  = output->usableArea;
     output->usableArea = usable;
     updateFullscreenLayers(output); // new surfaces must respect fullscreen
 
@@ -1419,9 +1450,6 @@ MuWM::arrangeLayers(wlr_output *wlrOutput)
         arrange(output->workspace);
 }
 
-// While an output shows a fullscreen window, its top-layer surfaces (bars)
-// are hidden. Derived from the current state each time, so every path that
-// changes it (close, workspace switch, ...) only has to call arrange().
 void
 MuWM::updateFullscreenLayers(Output *output)
 {
@@ -1696,7 +1724,11 @@ MuWM::switchWorkspace(Output *out, Workspace *ws_target)
 
     wlr_scene_node_set_enabled(&ws_old->sceneTree->node, false);
     wlr_scene_node_set_enabled(&ws_target->sceneTree->node, true);
-    out->workspace  = ws_target;
+    out->workspace = ws_target;
+
+    wlr_ext_workspace_handle_v1_set_active(ws_old->handle, false);
+    wlr_ext_workspace_handle_v1_set_active(ws_target->handle, true);
+
     m_focusedOutput = out;
 
     arrange(ws_target);
@@ -2374,7 +2406,10 @@ MuWM::onActivationRequest(void *data)
     // focus right now. Anything else should only be marked as urgent.
     wlr_surface *focused = m_seat->keyboard_state.focused_surface;
     if (ev->token->surface && ev->token->surface != focused)
-        return; // TODO: urgent border instead of ignoring
+    {
+        wlr_ext_workspace_handle_v1_set_urgent(target->workspace->handle, true);
+        return;
+    }
 
     if (target->workspace && target->workspace->output
         && target->workspace != target->workspace->output->workspace)
@@ -2465,4 +2500,24 @@ MuWM::constrainMotion(double &dx, double &dy)
         dy = ny - sy;
     }
     return true;
+}
+
+void
+MuWM::onWorkspaceCommit(void *data)
+{
+    auto *ev = static_cast<wlr_ext_workspace_v1_commit_event *>(data);
+
+    wlr_ext_workspace_v1_request *req;
+    wl_list_for_each(req, ev->requests, link)
+    {
+        // Only activation is advertised; ignore everything else.
+        if (req->type != WLR_EXT_WORKSPACE_V1_REQUEST_ACTIVATE)
+            continue;
+        if (!req->activate.workspace) // destroyed meanwhile
+            continue;
+
+        auto *ws = static_cast<Workspace *>(req->activate.workspace->data);
+        if (ws && ws->output)
+            switchWorkspace(ws->output, ws);
+    }
 }
