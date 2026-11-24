@@ -207,6 +207,15 @@ MuWM::init()
         wlr_log(WLR_INFO,
                 "Renderer can't import dmabufs; linux-dmabuf disabled");
 
+    // Explicit sync needs timelines in both the renderer and the backend. The
+    // scene graph passes each surface's acquire and release points on itself.
+    if (int drmFd = wlr_renderer_get_drm_fd(m_renderer);
+        drmFd >= 0 && m_renderer->features.timeline
+        && m_backend->features.timeline)
+        wlr_linux_drm_syncobj_manager_v1_create(m_display, 1, drmFd);
+    else
+        wlr_log(WLR_INFO, "No timeline support; explicit sync disabled");
+
     m_allocator = wlr_allocator_autocreate(m_backend, m_renderer);
     if (!m_allocator)
     {
