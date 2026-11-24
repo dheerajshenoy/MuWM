@@ -390,8 +390,8 @@ Toplevel::fitBorders()
 {
     const wlr_box geo = geometry();
     // Until the client commits a buffer its size is unknown; assume it obeyed.
-    const int w = (geo.width > 0 && geo.width < slot.width) ? geo.width
-                                                            : slot.width;
+    const int w
+        = (geo.width > 0 && geo.width < slot.width) ? geo.width : slot.width;
     const int h = (geo.height > 0 && geo.height < slot.height) ? geo.height
                                                                : slot.height;
     resizeBorders(w, h);
