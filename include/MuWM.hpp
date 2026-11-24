@@ -257,6 +257,7 @@ private:
     wlr_idle_notifier_v1 *m_idleNotifier                      = nullptr;
     wlr_idle_inhibit_manager_v1 *m_idleInhibit                = nullptr;
     wlr_output_power_manager_v1 *m_outputPower                = nullptr;
+    wlr_gamma_control_manager_v1 *m_gammaControl              = nullptr;
 
     Output *m_focusedOutput = nullptr;
     std::vector<Output *> m_outputs;

@@ -327,6 +327,9 @@ MuWM::init()
     m_outputPowerSetMode.bind<&MuWM::onOutputPowerSetMode>(
         &m_outputPower->events.set_mode, this);
 
+    m_gammaControl = wlr_gamma_control_manager_v1_create(m_display);
+    wlr_scene_set_gamma_control_manager_v1(m_scene, m_gammaControl);
+
     // Lazy: Xwayland only starts when the first X11 client connects.
     m_xwayland = wlr_xwayland_create(m_display, m_compositor, true);
     if (m_xwayland)
