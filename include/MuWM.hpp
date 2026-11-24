@@ -199,6 +199,9 @@ private:
     void onSessionActive(void *data);
     void onNewInhibitor(void *data);
     void onOutputPowerSetMode(void *data);
+    void onRequestStartDrag(void *data);
+    void onStartDrag(void *data);
+    void onDragIconDestroy(void *data);
 
     void updateConstraint(wlr_surface *focus);
     void deactivateConstraint();
@@ -227,7 +230,7 @@ private:
     Workspace *createWorkspace(Output *o, const std::string &name,
                                size_t index);
     void applyWorkspaces();
-    Toplevel* nextToplevel(wlr_direction dir);
+    Toplevel *nextToplevel(wlr_direction dir);
 
 private:
     bool m_ok = false;
@@ -313,6 +316,9 @@ private:
     Listener<MuWM> m_sessionActive;
     Listener<MuWM> m_newInhibitor;
     Listener<MuWM> m_outputPowerSetMode;
+    Listener<MuWM> m_requestStartDrag;
+    Listener<MuWM> m_startDrag;
+    Listener<MuWM> m_dragIconDestroy;
 
     // Super+drag: left button moves a window, right button resizes it.
     enum class Grab
@@ -339,6 +345,8 @@ private:
     wlr_scene_tree *m_layerTrees[4] = {};
     wlr_scene_tree *m_windowTree    = nullptr;
     wlr_scene_tree *m_lockTree = nullptr; // covers and lock surfaces, on top
+    wlr_scene_tree *m_dragIconTree
+        = nullptr; // icon of the current drag, on top
 
     // m_locked stays true until the locker really unlocks, even if the locker
     // process dies: then m_lock is null but the screen stays covered.

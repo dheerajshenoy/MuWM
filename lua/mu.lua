@@ -89,6 +89,11 @@ function mu.keybind(spec, handler) end
 ---@param cmd string The command to run
 function mu.spawn(cmd) end
 
+---Focus the nearest window in the given direction, or the next output if
+---there is none
+---@param dir string One of "up", "down", "left", "right"
+function mu.focus(dir) end
+
 ---Focus the next output in the given direction
 ---@param dir string One of "up", "down", "left", "right"
 function mu.focus_output(dir) end

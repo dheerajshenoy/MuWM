@@ -108,6 +108,9 @@ MuWM::~MuWM()
     m_workspaceCommit.unbind();
     m_newInhibitor.unbind();
     m_outputPowerSetMode.unbind();
+    m_requestStartDrag.unbind();
+    m_startDrag.unbind();
+    m_dragIconDestroy.unbind();
 
     if (m_outputListener.listener.link.prev)
         wl_list_remove(&m_outputListener.listener.link);
@@ -255,7 +258,8 @@ MuWM::init()
     m_layerTrees[ZWLR_LAYER_SHELL_V1_LAYER_OVERLAY]
         = wlr_scene_tree_create(&m_scene->tree);
 
-    m_lockTree = wlr_scene_tree_create(&m_scene->tree);
+    m_lockTree     = wlr_scene_tree_create(&m_scene->tree);
+    m_dragIconTree = wlr_scene_tree_create(&m_scene->tree);
 
     m_compositor = wlr_compositor_create(m_display, 5, m_renderer);
     wlr_subcompositor_create(m_display);
@@ -316,6 +320,9 @@ MuWM::init()
         &m_seat->events.request_set_selection, this);
     m_requestSetPrimary.bind<&MuWM::onRequestSetPrimarySelection>(
         &m_seat->events.request_set_primary_selection, this);
+    m_requestStartDrag.bind<&MuWM::onRequestStartDrag>(
+        &m_seat->events.request_start_drag, this);
+    m_startDrag.bind<&MuWM::onStartDrag>(&m_seat->events.start_drag, this);
 
     m_outputListener.wm = this;
 
@@ -1184,6 +1191,9 @@ MuWM::toplevelAt(double x, double y, wlr_surface **surface, double *sx,
 void
 MuWM::processMotion(uint32_t timeMsec, bool allowFocus)
 {
+    wlr_scene_node_set_position(&m_dragIconTree->node, m_cursor->x,
+                                m_cursor->y);
+
     if (m_locked)
     {
         // Only lock surfaces may see the pointer.
@@ -2348,6 +2358,10 @@ MuWM::startLock()
     m_grab    = Grab::None; // drop any move/resize in progress
     m_grabbed = nullptr;
 
+    if (m_seat->drag)
+        wlr_seat_pointer_end_grab(
+            m_seat); // a drag can't reach the lock surface
+
     if (Toplevel *t = focusedToplevel())
     {
         t->setActivated(false);
@@ -3058,20 +3072,20 @@ MuWM::nextToplevel(wlr_direction dir)
         int dist;
         switch (dir)
         {
-        case WLR_DIRECTION_LEFT:
-            dist = a.x - (b.x + b.width);
-            break;
-        case WLR_DIRECTION_RIGHT:
-            dist = b.x - (a.x + a.width);
-            break;
-        case WLR_DIRECTION_UP:
-            dist = a.y - (b.y + b.height);
-            break;
-        case WLR_DIRECTION_DOWN:
-            dist = b.y - (a.y + a.height);
-            break;
-        default:
-            continue;
+            case WLR_DIRECTION_LEFT:
+                dist = a.x - (b.x + b.width);
+                break;
+            case WLR_DIRECTION_RIGHT:
+                dist = b.x - (a.x + a.width);
+                break;
+            case WLR_DIRECTION_UP:
+                dist = a.y - (b.y + b.height);
+                break;
+            case WLR_DIRECTION_DOWN:
+                dist = b.y - (a.y + a.height);
+                break;
+            default:
+                continue;
         }
         if (dist >= 0 && (!next || dist < best))
         {
@@ -3081,4 +3095,36 @@ MuWM::nextToplevel(wlr_direction dir)
     }
 
     return next;
+}
+
+void
+MuWM::onRequestStartDrag(void *data)
+{
+    auto *ev = static_cast<wlr_seat_request_start_drag_event *>(data);
+    if (m_locked
+        || !wlr_seat_validate_pointer_grab_serial(m_seat, ev->origin,
+                                                  ev->serial))
+    {
+        wlr_data_source_destroy(ev->drag->source);
+        return;
+    }
+    wlr_seat_start_pointer_drag(m_seat, ev->drag, ev->serial);
+}
+
+void
+MuWM::onStartDrag(void *data)
+{
+    auto *drag = static_cast<wlr_drag *>(data);
+    if (drag->icon)
+        wlr_scene_drag_icon_create(m_dragIconTree, drag->icon);
+    m_dragIconDestroy.bind<&MuWM::onDragIconDestroy>(&drag->events.destroy,
+                                                     this);
+    deactivateConstraint(); // a locked pointer can't carry a drag
+}
+
+void
+MuWM::onDragIconDestroy(void *)
+{
+    m_dragIconDestroy.unbind(); // match your Listener API
+    refreshPointerFocus();      // the surface under the cursor may have changed
 }
