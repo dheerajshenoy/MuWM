@@ -305,11 +305,11 @@ MuWM::handleNewOutput(wlr_output *output)
     wlr_output_state_set_enabled(&state, true);
     if (wlr_output_mode *mode = wlr_output_preferred_mode(output))
         wlr_output_state_set_mode(&state, mode);
-    wlr_output_commit_state(output, &state);
     wlr_output_state_set_scale(&state, m_config.scale);
+    wlr_output_commit_state(output, &state);
+    wlr_output_state_finish(&state);
 
     wlr_xcursor_manager_load(m_xcursor, m_config.scale);
-    wlr_output_state_finish(&state);
 
     auto *o            = new Output{this, output};
     o->sceneOutput     = wlr_scene_output_create(m_scene, output);
@@ -411,7 +411,7 @@ MuWM::applyOutputConfig(wlr_output_configuration_v1 *config, bool test)
         if (s.enabled)
         {
             wlr_output_layout_add(m_layout, s.output, s.x, s.y);
-            wlr_xcursor_manager_load(m_xcursor, m_config.scale);
+            wlr_xcursor_manager_load(m_xcursor, s.scale);
         }
         else
             wlr_output_layout_remove(m_layout, s.output);
