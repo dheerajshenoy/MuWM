@@ -106,7 +106,7 @@ public:
     void removeKeyboard(Keyboard *keyboard);
     void removePointer(Pointer *pointer);
 
-    void arrangeLayers(wlr_output *output);
+    void arrangeLayers(wlr_output *output, bool relayout = true);
     void moveLayerSurface(LayerShellSurface *s);
     void focusLayerSurface(LayerShellSurface *s);
     void releaseLayerFocus(LayerShellSurface *s);
@@ -364,9 +364,12 @@ private:
     int m_pendingChanges         = ChangeNone;
     wl_event_source *m_applyIdle = nullptr;
 
+    std::vector<Toplevel *> m_tiled; // scratch for arrange(); not re-entrant
     std::vector<Binding> m_keybindings;
     EventBus m_eventBus;
 
     uint64_t m_globalTopLevelId
         = 0; // incremented for each new toplevel, used to identify it in events
+
+    int64_t m_lastActivityMs = -1'000'000;
 };

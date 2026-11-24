@@ -78,6 +78,7 @@ Toplevel::onCommit(void *)
     if (xdg->base->initial_commit)
     {
         wlr_xdg_toplevel_set_size(xdg, 0, 0); // 0,0 = "client picks its size"
+        sentW = sentH = 0; // a remapped window starts from "client picks"
         // A client can ask for fullscreen before its first commit.
         wm->setFullscreen(this, xdg->requested.fullscreen);
 
@@ -145,6 +146,13 @@ void
 Toplevel::resizeBorders(int w, int h)
 {
     const int b = wm->config().border.width;
+    if (w == borderW && h == borderH && b == borderB)
+        return;
+
+    borderW = w;
+    borderH = h;
+    borderB = b;
+
     wlr_scene_rect_set_size(border[0], w + 2 * b, b);
     wlr_scene_node_set_position(&border[0]->node, -b, -b);
     wlr_scene_rect_set_size(border[1], w + 2 * b, b);
@@ -191,6 +199,10 @@ Toplevel::setSize(int width, int height)
 {
     if (!xsurface)
     {
+        if (width == sentW && height == sentH)
+            return;
+        sentW = width;
+        sentH = height;
         wlr_xdg_toplevel_set_size(xdg, width, height);
         return;
     }

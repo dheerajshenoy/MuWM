@@ -82,4 +82,8 @@ struct Toplevel
     const char *appId() const; // never null
     bool isDialog() const;     // has a parent window
     bool isFixedSize() const;  // min size equals max size
+
+    int sentW = -1, sentH = -1; // last size we asked an xdg client for
+    int borderW = -1, borderH = -1,
+        borderB = -1; // the last size of the borders
 };

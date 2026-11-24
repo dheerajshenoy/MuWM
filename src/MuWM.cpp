@@ -522,12 +522,13 @@ MuWM::applyOutputConfig(wlr_output_configuration_v1 *config, bool test)
     wl_list_for_each(h, &config->heads, link)
     {
         wlr_output *wo = h->state.output;
-        wlr_log(WLR_INFO,
-                "Output config %s: %s %s mode=%p custom=%dx%d scale=%.2f pos=%d,%d",
-                test ? "test" : "apply", wo->name,
-                h->state.enabled ? "enable" : "disable", (void *)h->state.mode,
-                h->state.custom_mode.width, h->state.custom_mode.height,
-                h->state.scale, h->state.x, h->state.y);
+        wlr_log(
+            WLR_INFO,
+            "Output config %s: %s %s mode=%p custom=%dx%d scale=%.2f pos=%d,%d",
+            test ? "test" : "apply", wo->name,
+            h->state.enabled ? "enable" : "disable", (void *)h->state.mode,
+            h->state.custom_mode.width, h->state.custom_mode.height,
+            h->state.scale, h->state.x, h->state.y);
         if (h->state.enabled && !h->state.mode
             && h->state.custom_mode.width == 0)
             h->state.mode = wlr_output_preferred_mode(wo);
@@ -923,6 +924,7 @@ MuWM::currentWorkspace()
 void
 MuWM::focusToplevel(Toplevel *t, bool raise)
 {
+
     Toplevel *oldFocus = focusedToplevel();
 
     if (oldFocus == t)
@@ -949,9 +951,13 @@ MuWM::focusToplevel(Toplevel *t, bool raise)
     ws->focusHistory.push_back(t);
 
     // Focusing another window would hide it behind the fullscreen one.
-    for (Toplevel *other : std::vector<Toplevel *>(ws->toplevels))
-        if (other != t && other->fullscreen)
-            setFullscreen(other, false);
+    const bool otherFullscreen
+        = std::ranges::any_of(ws->toplevels, [t](const Toplevel *o)
+    { return o != t && o->fullscreen; });
+    if (otherFullscreen)
+        for (Toplevel *other : std::vector<Toplevel *>(ws->toplevels))
+            if (other != t && other->fullscreen)
+                setFullscreen(other, false);
 
     if (raise)
         wlr_scene_node_raise_to_top(&t->tree->node);
@@ -1104,7 +1110,7 @@ MuWM::arrange()
 {
     for (Output *output : m_outputs)
     {
-        arrangeLayers(output->output);
+        arrangeLayers(output->output, false); // arrange() below does the layout
         arrange(output->workspace);
     }
 }
@@ -1147,8 +1153,8 @@ MuWM::arrange(Workspace *ws)
         return;
     }
 
-    // Floating windows keep their own geometry and stay out of the layout.
-    std::vector<Toplevel *> tiled;
+    auto &tiled = m_tiled;
+    tiled.clear();
     for (Toplevel *t : toplevels)
     {
         if (t->floating)
@@ -1239,8 +1245,8 @@ MuWM::toplevelFromSurface(const wlr_surface *surface)
 {
     if (!surface)
         return nullptr;
-    const wlr_surface *root = wlr_surface_get_root_surface(
-        const_cast<wlr_surface *>(surface));
+    const wlr_surface *root
+        = wlr_surface_get_root_surface(const_cast<wlr_surface *>(surface));
     for (Output *o : m_outputs)
         for (Workspace *ws : o->workspaces)
             for (Toplevel *t : ws->toplevels)
@@ -1252,8 +1258,9 @@ MuWM::toplevelFromSurface(const wlr_surface *surface)
 void
 MuWM::processMotion(uint32_t timeMsec, bool allowFocus)
 {
-    wlr_scene_node_set_position(&m_dragIconTree->node, m_cursor->x,
-                                m_cursor->y);
+    if (m_seat->drag)
+        wlr_scene_node_set_position(&m_dragIconTree->node, m_cursor->x,
+                                    m_cursor->y);
 
     if (m_locked)
     {
@@ -1662,7 +1669,7 @@ MuWM::closeLayerSurfacesOn(wlr_output *output)
 // over for windows. Surfaces with an exclusive zone (bars) go first so that
 // the others are laid out in the remaining space; higher layers win ties.
 void
-MuWM::arrangeLayers(wlr_output *wlrOutput)
+MuWM::arrangeLayers(wlr_output *wlrOutput, bool relayout)
 {
     if (!wlrOutput || !wlrOutput->data)
         return;
@@ -1691,8 +1698,9 @@ MuWM::arrangeLayers(wlr_output *wlrOutput)
 
     // A bar appearing, closing or resizing changes the room left for windows.
     // Hidden workspaces are re-arranged when they are switched to.
-    if (usable.x != old.x || usable.y != old.y || usable.width != old.width
-        || usable.height != old.height)
+    if (relayout
+        && (usable.x != old.x || usable.y != old.y || usable.width != old.width
+            || usable.height != old.height))
         arrange(output->workspace);
 }
 
@@ -2965,6 +2973,12 @@ MuWM::activateToplevel(Toplevel *t)
 void
 MuWM::notifyActivity()
 {
+    timespec now;
+    clock_gettime(CLOCK_MONOTONIC_COARSE, &now);
+    const int64_t ms = int64_t(now.tv_sec) * 1000 + now.tv_nsec / 1'000'000;
+    if (ms - m_lastActivityMs < 100)
+        return; // idle timeouts are seconds long; no need to reset them at kHz
+    m_lastActivityMs = ms;
     wlr_idle_notifier_v1_notify_activity(m_idleNotifier, m_seat);
 }
 
@@ -2990,12 +3004,11 @@ MuWM::updateIdleInhibit(const wlr_idle_inhibitor_v1 *ignore)
         if (inh == ignore)
             continue;
 
-        wlr_surface *root = wlr_surface_get_root_surface(inh->surface);
+        wlr_surface *root  = wlr_surface_get_root_surface(inh->surface);
         // Not a window we manage (a layer surface): count it.
-        const Toplevel *t = toplevelFromSurface(root);
-        const bool visible
-            = !t || !t->workspace || !t->workspace->output
-              || t->workspace == t->workspace->output->workspace;
+        const Toplevel *t  = toplevelFromSurface(root);
+        const bool visible = !t || !t->workspace || !t->workspace->output
+                             || t->workspace == t->workspace->output->workspace;
 
         inhibit = inhibit || visible;
     }
@@ -3212,7 +3225,11 @@ MuWM::onStartDrag(void *data)
 {
     auto *drag = static_cast<wlr_drag *>(data);
     if (drag->icon)
+    {
         wlr_scene_drag_icon_create(m_dragIconTree, drag->icon);
+        wlr_scene_node_set_position(&m_dragIconTree->node, m_cursor->x,
+                                    m_cursor->y);
+    }
     m_dragIconDestroy.bind<&MuWM::onDragIconDestroy>(&drag->events.destroy,
                                                      this);
     deactivateConstraint(); // a locked pointer can't carry a drag
