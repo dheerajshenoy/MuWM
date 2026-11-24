@@ -81,6 +81,8 @@ public:
     void setFullscreen(Toplevel *, bool fullscreen);
     void setMasterRatio(float ratio);
     void changeVt(int vt);
+    void focusOutput(wlr_direction dir);
+    void moveToOutput(wlr_direction dir);
 
     enum Change
     {
@@ -219,6 +221,7 @@ private:
     void beginGrab(Toplevel *, bool resize);
     void endGrab();
     void insertNewTopLevel(std::vector<Toplevel *> &toplevels, Toplevel *t);
+    Output *adjacentOutput(wlr_direction dir);
 
 private:
     bool m_ok = false;

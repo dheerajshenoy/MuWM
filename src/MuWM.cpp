@@ -1702,6 +1702,76 @@ MuWM::focusPrev()
 }
 
 void
+MuWM::focusOutput(wlr_direction dir)
+{
+    if (!m_focusedOutput || m_locked)
+        return;
+
+    Output *out = adjacentOutput(dir);
+    if (!out)
+        return; // no monitor in that direction
+
+    // Drop the focus on the old monitor first (border, activated state).
+    if (Toplevel *old = focusedToplevel())
+    {
+        old->setActivated(false);
+        old->setFocused(false);
+    }
+    m_focusedOutput = out;
+
+    // Focus whatever that monitor's workspace used last.
+    Workspace *ws = out->workspace;
+    Toplevel *t   = ws ? ws->focusedToplevel : nullptr;
+    if (!t && ws && !ws->toplevels.empty())
+        t = ws->toplevels.back();
+
+    if (t)
+    {
+        ws->focusedToplevel = nullptr; // focusToplevel returns early otherwise
+        focusToplevel(t);
+    }
+    else if (!m_focusedLayer && !m_focusedUnmanaged)
+        wlr_seat_keyboard_notify_clear_focus(m_seat); // empty monitor
+
+    // Move the pointer along so mouse and keyboard stay on the same monitor.
+    wlr_box b;
+    wlr_output_layout_get_box(m_layout, out->output, &b);
+    wlr_cursor_warp(m_cursor, nullptr, b.x + b.width / 2.0,
+                    b.y + b.height / 2.0);
+    refreshPointerFocus();
+}
+
+void
+MuWM::moveToOutput(wlr_direction dir)
+{
+    if (!m_focusedOutput || m_locked)
+        return;
+
+    Output *out = adjacentOutput(dir);
+    if (!out)
+        return; // no monitor in that direction
+
+    Toplevel *t = focusedToplevel();
+    if (!t)
+        return; // nothing to move
+
+    if (t->floating)
+    {
+        const wlr_box &from = m_focusedOutput->usableArea;
+        const wlr_box &to   = out->usableArea;
+        t->floatBox.x += to.x - from.x;
+        t->floatBox.y += to.y - from.y;
+    }
+    toplevelToWorkspace(t, out->workspace);
+
+    wlr_box b;
+    wlr_output_layout_get_box(m_layout, out->output, &b);
+    wlr_cursor_warp(m_cursor, nullptr, b.x + b.width / 2.0,
+                    b.y + b.height / 2.0);
+    refreshPointerFocus();
+}
+
+void
 MuWM::swapNext()
 {
     Workspace *ws = currentWorkspace();
@@ -2802,4 +2872,17 @@ MuWM::wantsTearing(const Output *o) const
             return true;
     }
     return false;
+}
+
+Output *
+MuWM::adjacentOutput(wlr_direction dir)
+{
+    if (!m_focusedOutput)
+        return nullptr;
+    wlr_box box;
+    wlr_output_layout_get_box(m_layout, m_focusedOutput->output, &box);
+    wlr_output *next = wlr_output_layout_adjacent_output(
+        m_layout, dir, m_focusedOutput->output, box.x + box.width / 2.0,
+        box.y + box.height / 2.0);
+    return next && next->data ? static_cast<Output *>(next->data) : nullptr;
 }

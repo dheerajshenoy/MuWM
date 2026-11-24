@@ -422,6 +422,22 @@ pushProxy(lua_State *L, const Group *g)
     lua_setmetatable(L, -2);
 }
 
+wlr_direction
+checkDirection(lua_State *L, int idx)
+{
+    const char *d = luaL_checkstring(L, idx);
+    if (!strcmp(d, "up"))
+        return WLR_DIRECTION_UP;
+    if (!strcmp(d, "down"))
+        return WLR_DIRECTION_DOWN;
+    if (!strcmp(d, "left"))
+        return WLR_DIRECTION_LEFT;
+    if (!strcmp(d, "right"))
+        return WLR_DIRECTION_RIGHT;
+    luaL_error(L, "invalid direction '%s'", d);
+    return WLR_DIRECTION_LEFT; // not reached
+}
+
 std::optional<Binding>
 parseBinding(std::string_view s)
 {
@@ -495,6 +511,33 @@ int
 luaSpawn(lua_State *L)
 {
     wmFrom(L)->spawn(luaL_checkstring(L, 1));
+    return 0;
+}
+
+// clang-format off
+/*lua
+    ---Focus the next output in the given direction
+    ---@param dir string One of "up", "down", "left", "right"
+    function mu.focus_output(dir) end
+*/
+int
+luaFocusOutput(lua_State *L)
+{
+    wlr_direction dir = checkDirection(L, 1);
+    wmFrom(L)->focusOutput(dir);
+    return 0;
+}
+
+/*lua
+  ---Move the focused window to the output in the given direction
+  ---@param dir string One of "up", "down", "left", "right"
+  function mu.move_to_output(dir) end
+*/
+int
+luaMoveToOutput(lua_State *L)
+{
+    wlr_direction dir = checkDirection(L, 1);
+    wmFrom(L)->moveToOutput(dir);
     return 0;
 }
 
@@ -915,6 +958,10 @@ MuWM::initLuaBindings()
 
         // lua ---@field focus_prev fun() Focus the previous window.
         funcField("focus_prev", luaCall<&MuWM::focusPrev>),
+
+        funcField("focus_output", luaFocusOutput),
+
+        funcField("move_to_output", luaMoveToOutput),
 
         // lua ---@field swap_next fun() Swap the focused window with the next
         // window.
