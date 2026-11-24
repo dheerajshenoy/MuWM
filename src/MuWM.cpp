@@ -794,10 +794,20 @@ MuWM::applyPointerConfig(Pointer *pointer)
         return;
     libinput_device *dev = wlr_libinput_get_device_handle(pointer->device);
 
+    // These are touchpad options; only touchpads support tapping, so this
+    // leaves mice alone.
+    if (libinput_device_config_tap_get_finger_count(dev) == 0)
+        return;
+
     // Always write the full state: turning an option off must take effect too.
     if (libinput_device_config_scroll_has_natural_scroll(dev))
+    {
         libinput_device_config_scroll_set_natural_scroll_enabled(
             dev, m_config.touchpad.natural_scroll);
+        wlr_log(WLR_DEBUG, "%s: natural scroll wanted=%d now=%d",
+                pointer->device->name, m_config.touchpad.natural_scroll,
+                libinput_device_config_scroll_get_natural_scroll_enabled(dev));
+    }
 
     if (libinput_device_config_tap_get_finger_count(dev) > 0)
         libinput_device_config_tap_set_enabled(
