@@ -4,7 +4,9 @@
 
 ### Compositor
 - wlroots-based tiling Wayland compositor with a master/stack layout.
-  Master gets 55%. The stack shares the rest evenly.
+  Master gets 55% by default. The stack shares the rest evenly.
+- The master ratio is kept per workspace on each output. `layout.master_ratio`
+  is the default, and `mu.set_master_ratio` changes the current workspace only.
 - Focus, swap and close window actions.
 - Focus borders with active and inactive colors.
 - Smart gaps and smart borders for a single window.
@@ -51,6 +53,8 @@
   Every monitor is covered at once. Keybindings, focus and the pointer are
   blocked. If the locker dies, the session stays locked.
 - Pointer events reach layer-shell surfaces such as bars.
+- Drag and drop between clients, with the drag icon following the pointer.
+  Drags are refused while locked and end if the session locks mid-drag.
 
 ### Input
 - Keyboard layout, variant, options and repeat settings.
@@ -61,6 +65,8 @@
 - `mu` global table with `mu.opts` and functions such as `mu.keybind`,
   `mu.spawn`, `mu.reload`, focus, swap, close and quit.
 - Workspace functions, `toggle_fullscreen` and `toggle_floating`.
+- `mu.focus(dir)` focuses the nearest window in a direction (`up`, `down`,
+  `left` or `right`), or the next output when there is none.
 - `mu.opts.new_client_position` sets where new windows go:
   `after_current`, `before_current`, `top` or `bottom`.
 - String colors such as `"#rrggbb"`.
