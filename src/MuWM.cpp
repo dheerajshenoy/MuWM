@@ -332,7 +332,9 @@ MuWM::handleNewOutput(wlr_output *output)
 
     wlr_xcursor_manager_load(m_xcursor, m_config.scale);
 
-    auto *o            = new Output{this, output};
+    auto *o            = new Output{};
+    o->wm = this;
+    o->output = output;
     o->sceneOutput     = wlr_scene_output_create(m_scene, output);
     output->data       = o;
     auto *layoutOutput = wlr_output_layout_add_auto(m_layout, output);
@@ -547,7 +549,9 @@ MuWM::onNewToplevel(void *data)
 void
 MuWM::handleNewToplevel(wlr_xdg_toplevel *xdg)
 {
-    auto *t         = new Toplevel{this, xdg};
+    auto *t         = new Toplevel{};
+    t->wm  = this;
+    t->xdg = xdg;
     t->tree         = wlr_scene_tree_create(m_windowTree);
     t->surfaceTree  = wlr_scene_xdg_surface_create(t->tree, xdg->base);
     xdg->base->data = t->surfaceTree; // popups look their parent's tree up here
@@ -581,7 +585,9 @@ MuWM::handleNewInput(wlr_input_device *device)
     {
         wlr_cursor_attach_input_device(m_cursor, device);
 
-        auto *p = new Pointer{this, device};
+        auto *p = new Pointer{};
+        p->wm     = this;
+        p->device = device;
         p->destroy.bind<&Pointer::onDestroy>(&device->events.destroy, p);
         m_pointers.push_back(p);
         applyPointerConfig(p);
@@ -592,7 +598,9 @@ MuWM::handleNewInput(wlr_input_device *device)
 
     wlr_keyboard *kb = wlr_keyboard_from_input_device(device);
 
-    auto *k = new Keyboard{this, kb};
+    auto *k = new Keyboard{};
+    k->wm = this;
+    k->kb = kb;
     k->key.bind<&Keyboard::onKey>(&kb->events.key, k);
     k->modifiers.bind<&Keyboard::onModifiers>(&kb->events.modifiers, k);
     k->destroy.bind<&Keyboard::onDestroy>(&kb->base.events.destroy, k);
@@ -1307,7 +1315,8 @@ void
 MuWM::onNewDecoration(void *data)
 {
     auto *d
-        = new Decoration{static_cast<wlr_xdg_toplevel_decoration_v1 *>(data)};
+        = new Decoration{};
+    d->deco = static_cast<wlr_xdg_toplevel_decoration_v1 *>(data);
     d->requestMode.bind<&Decoration::onRequestMode>(
         &d->deco->events.request_mode, d);
     d->commit.bind<&Decoration::onCommit>(
@@ -2015,7 +2024,10 @@ MuWM::onNewPopup(void *data)
 
     xdg->base->data = wlr_scene_xdg_surface_create(parentTree, xdg->base);
 
-    auto *p = new Popup{this, xdg, parentTree};
+    auto *p = new Popup{};
+    p->wm = this;
+    p->xdg = xdg;
+    p->parentTree = parentTree;
     p->commit.bind<&Popup::onCommit>(&xdg->base->surface->events.commit, p);
     p->destroy.bind<&Popup::onDestroy>(&xdg->events.destroy, p);
 }
@@ -2155,7 +2167,9 @@ MuWM::onLockNewSurface(void *data)
 {
     auto *surface = static_cast<wlr_session_lock_surface_v1 *>(data);
 
-    auto *ls = new LockSurface{this, surface};
+    auto *ls = new LockSurface{};
+    ls->wm = this;
+    ls->surface = surface;
     ls->tree = wlr_scene_subsurface_tree_create(m_lockTree, surface->surface);
     ls->map.bind<&LockSurface::onMap>(&surface->surface->events.map, ls);
     ls->destroy.bind<&LockSurface::onDestroy>(&surface->events.destroy, ls);
@@ -2331,7 +2345,9 @@ MuWM::onNewXWaylandSurface(void *data)
 
     if (xs->override_redirect)
     {
-        auto *u = new XUnmanaged{this, xs};
+        auto *u = new XUnmanaged{};
+        u->wm = this;
+        u->xsurface = xs;
         u->associate.bind<&XUnmanaged::onAssociate>(&xs->events.associate, u);
         u->dissociate.bind<&XUnmanaged::onDissociate>(&xs->events.dissociate,
                                                       u);
@@ -2345,7 +2361,9 @@ MuWM::onNewXWaylandSurface(void *data)
         return;
     }
 
-    auto *t = new Toplevel{this, nullptr, xs};
+    auto *t = new Toplevel{};
+    t->wm = this;
+    t->xsurface = xs;
     t->tree = wlr_scene_tree_create(m_windowTree);
     t->id   = m_globalTopLevelId++;
 
