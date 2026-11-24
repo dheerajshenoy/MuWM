@@ -59,8 +59,9 @@ public:
         return m_layout;
     }
 
-
     void activateToplevel(Toplevel *);
+    void notifyActivity();
+    void updateIdleInhibit(const wlr_idle_inhibitor_v1 *ignore = nullptr);
 
     // Window
     void focusNext();
@@ -187,6 +188,7 @@ private:
     void onConstraintDestroy(void *data);
     void onWorkspaceCommit(void *data);
     void onSessionActive(void *data);
+    void onNewInhibitor(void *data);
 
     void updateConstraint(wlr_surface *focus);
     void deactivateConstraint();
@@ -251,6 +253,8 @@ private:
     wlr_pointer_constraint_v1 *m_activeConstraint             = nullptr;
     wlr_foreign_toplevel_manager_v1 *m_foreignToplevelManager = nullptr;
     wlr_linux_dmabuf_v1 *m_dmabuf                             = nullptr;
+    wlr_idle_notifier_v1 *m_idleNotifier                      = nullptr;
+    wlr_idle_inhibit_manager_v1 *m_idleInhibit                = nullptr;
 
     Output *m_focusedOutput = nullptr;
     std::vector<Output *> m_outputs;
@@ -290,6 +294,7 @@ private:
     Listener<MuWM> m_constraintDestroy;
     Listener<MuWM> m_workspaceCommit;
     Listener<MuWM> m_sessionActive;
+    Listener<MuWM> m_newInhibitor;
 
     // Super+drag: left button moves a window, right button resizes it.
     enum class Grab

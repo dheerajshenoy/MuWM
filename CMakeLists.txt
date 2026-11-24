@@ -72,6 +72,7 @@ add_executable(${PROJECT_NAME}
     src/Popup.cpp
     src/LockSurface.cpp
     src/XUnmanaged.cpp
+    src/IdleInhibitor.cpp
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE

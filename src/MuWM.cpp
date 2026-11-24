@@ -1,6 +1,7 @@
 #include "MuWM.hpp"
 
 #include "Decoration.hpp"
+#include "IdleInhibitor.hpp"
 #include "Keyboard.hpp"
 #include "LayerShellSurface.hpp"
 #include "LockSurface.hpp"
@@ -69,6 +70,8 @@ MuWM::~MuWM()
     m_constraintDestroy.unbind();
     m_activationRequest.unbind();
     m_sessionActive.unbind();
+    m_workspaceCommit.unbind();
+    m_newInhibitor.unbind();
 
     if (m_outputListener.listener.link.prev)
         wl_list_remove(&m_outputListener.listener.link);
@@ -312,6 +315,12 @@ MuWM::init()
 
     m_foreignToplevelManager
         = wlr_foreign_toplevel_manager_v1_create(m_display);
+
+    m_idleNotifier = wlr_idle_notifier_v1_create(m_display);
+
+    m_idleInhibit = wlr_idle_inhibit_v1_create(m_display);
+    m_newInhibitor.bind<&MuWM::onNewInhibitor>(
+        &m_idleInhibit->events.new_inhibitor, this);
 
     // Lazy: Xwayland only starts when the first X11 client connects.
     m_xwayland = wlr_xwayland_create(m_display, m_compositor, true);
@@ -977,6 +986,8 @@ MuWM::removeToplevel(Toplevel *t)
 
     refreshPointerFocus(); // the cursor may now be over something else
     m_eventBus.emit(EventType::WindowClose, closed);
+
+    updateIdleInhibit();
 }
 
 void
@@ -1170,6 +1181,7 @@ MuWM::processMotion(uint32_t timeMsec)
 void
 MuWM::onCursorMotion(void *data)
 {
+    notifyActivity();
     auto *ev = static_cast<wlr_pointer_motion_event *>(data);
     wlr_relative_pointer_manager_v1_send_relative_motion(
         m_relativePointer, m_seat, uint64_t(ev->time_msec) * 1000, ev->delta_x,
@@ -1200,6 +1212,7 @@ MuWM::onCursorMotionAbs(void *data)
 void
 MuWM::onCursorButton(void *data)
 {
+    notifyActivity();
     auto *ev = static_cast<wlr_pointer_button_event *>(data);
 
     if (m_locked)
@@ -1250,6 +1263,7 @@ MuWM::onCursorButton(void *data)
 void
 MuWM::onCursorAxis(void *data)
 {
+    notifyActivity();
     auto *ev = static_cast<wlr_pointer_axis_event *>(data);
     wlr_seat_pointer_notify_axis(m_seat, ev->time_msec, ev->orientation,
                                  ev->delta, ev->delta_discrete, ev->source,
@@ -1779,6 +1793,8 @@ MuWM::switchWorkspace(Output *out, Workspace *ws_target)
         focusToplevel(next);
     else if (!m_focusedLayer && !m_locked)
         wlr_seat_keyboard_clear_focus(m_seat);
+
+    updateIdleInhibit();
 }
 
 void
@@ -1842,6 +1858,8 @@ MuWM::toplevelToWorkspace(Toplevel *toplevel, Workspace *ws_target)
     }
     else if (ws_old)
         ws_old->focusedToplevel = prev;
+
+    updateIdleInhibit();
 }
 
 void
@@ -2612,4 +2630,47 @@ MuWM::activateToplevel(Toplevel *t)
     if (ws->output && ws != ws->output->workspace)
         switchWorkspace(ws->output, ws); // bring its workspace on screen first
     focusToplevel(t);
+}
+
+void
+MuWM::notifyActivity()
+{
+    wlr_idle_notifier_v1_notify_activity(m_idleNotifier, m_seat);
+}
+
+void
+MuWM::onNewInhibitor(void *data)
+{
+    auto *inh    = static_cast<wlr_idle_inhibitor_v1 *>(data);
+    auto *i      = new IdleInhibitor{};
+    i->wm        = this;
+    i->inhibitor = inh;
+    i->destroy.bind<&IdleInhibitor::onDestroy>(&inh->events.destroy, i);
+    updateIdleInhibit();
+}
+
+// Inhibit while at least one inhibitor's window is on screen.
+void
+MuWM::updateIdleInhibit(const wlr_idle_inhibitor_v1 *ignore)
+{
+    bool inhibit = false;
+    wlr_idle_inhibitor_v1 *inh;
+    wl_list_for_each(inh, &m_idleInhibit->inhibitors, link)
+    {
+        if (inh == ignore)
+            continue;
+
+        wlr_surface *root = wlr_surface_get_root_surface(inh->surface);
+        bool visible
+            = true; // not a window we manage (a layer surface): count it
+
+        for (Output *o : m_outputs)
+            for (Workspace *ws : o->workspaces)
+                for (Toplevel *t : ws->toplevels)
+                    if (t->surface() == root)
+                        visible = (ws == o->workspace);
+
+        inhibit = inhibit || visible;
+    }
+    wlr_idle_notifier_v1_set_inhibited(m_idleNotifier, inhibit);
 }

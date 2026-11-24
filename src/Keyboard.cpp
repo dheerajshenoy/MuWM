@@ -11,6 +11,7 @@ constexpr uint32_t kBindMask = WLR_MODIFIER_SHIFT | WLR_MODIFIER_CTRL
 void
 Keyboard::onKey(void *data)
 {
+    wm->notifyActivity();
     auto *ev                    = static_cast<wlr_keyboard_key_event *>(data);
     const xkb_keycode_t keycode = ev->keycode + 8;
 
