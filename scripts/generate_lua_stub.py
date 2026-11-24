@@ -29,10 +29,11 @@ KIND_TYPE = {
     "int": "integer",
     "bool": "boolean",
     "color": "mu.Color",
+    "float": "number",
 }
 
 BLOCK_RE = re.compile(r"/\*lua[ \t]*\n(.*?)\*/", re.DOTALL)
-FIELD_CALL_RE = re.compile(r"\b(string|int|bool|color|sub|func)Field\(\s*\"(\w+)\"")
+FIELD_CALL_RE = re.compile(r"\b(string|int|bool|float|color|enum|sub|func)Field\(\s*\"(\w+)\"")
 GROUP_RE = re.compile(r"\b(\w+Group)\.fields\s*=\s*\{")
 
 
