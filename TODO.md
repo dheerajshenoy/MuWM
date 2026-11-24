@@ -11,6 +11,17 @@ Tiling Wayland compositor in C++ on wlroots (CMake).
 - [ ] Run from a TTY (DRM/KMS backend, libseat)
 - [ ] Output and input hotplug (add and remove)
 - [ ] Session entry: `/usr/share/wayland-sessions/muwm.desktop`, `XDG_CURRENT_DESKTOP`, `XDG_SESSION_TYPE`, dbus activation environment
+- [ ] VT switching (Ctrl+Alt+F1..F12 via `XF86Switch_VT_n` and `wlr_session_change_vt`); redraw when the session becomes active again
+- [ ] Portal config (`muwm-portals.conf` using `wlr;gtk`) so screen sharing and file pickers work; log to a file when run from a TTY
+- [ ] Idle and power: `ext-idle-notify-v1` and idle-inhibit (notify activity on input), `wlr_output_power_manager_v1` (DPMS), `wlr_gamma_control_manager_v1`
+- [ ] Laptop input: libinput settings (tap-to-click, natural scroll, disable-while-typing), lid switch turns the internal panel off
+- [ ] Test output hotplug: unplug a monitor with windows on it, unplug the last output
+- [ ] Presentation timing (`wlr_presentation_create`, `wp_presentation`) for mpv and games
+- [ ] dmabuf feedback for direct scanout (create `linux-dmabuf-v1` ourselves and call `wlr_scene_set_linux_dmabuf_v1`); check that `init_wl_shm` didn't drop the syncobj global
+- [ ] Cursor theme: pass the theme to the xcursor manager and set `XCURSOR_THEME` / `XCURSOR_SIZE` for clients
+- [ ] Multi-GPU: document `WLR_DRM_DEVICES`
+- [ ] Small protocols: tearing-control, content-type, single-pixel-buffer, xdg-foreign, security-context
+- [ ] Clean exit on SIGTERM; reap child processes
 - [ ] Run under ASan / UBSan, check listeners for leaks
 - [ ] README and license
 - [ ] Check that the name `muwm` is free on GitHub and the AUR
