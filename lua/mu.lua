@@ -78,7 +78,6 @@
 ---@field close fun() Close the focused window.
 ---@field quit fun() Quit the window manager.
 ---@field reload fun() Reload the config file.
-
 mu = {}
 
 ---Bind a key to a Lua function

@@ -204,7 +204,9 @@ def render(blocks, groups):
         for name in g["fields"]:
             if name in g["docs"]:
                 out.append(g["docs"][name][1])
-        out.append("")
+        # The root class must touch `mu = {}`, or LuaLS won't attach it.
+        if g["cls"] != "mu":
+            out.append("")
     out.append("mu = {}\n")
     out += [f + "\n" for f in funcs]
     return "\n".join(out).rstrip("\n") + "\n"
