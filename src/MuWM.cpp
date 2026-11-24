@@ -381,6 +381,12 @@ MuWM::init()
 
     wlr_presentation_create(m_display, m_backend, 2);
 
+    m_pointerGestures = wlr_pointer_gestures_v1_create(m_display);
+    m_pinchBegin.bind<&MuWM::onPinchBegin>(&m_cursor->events.pinch_begin, this);
+    m_pinchUpdate.bind<&MuWM::onPinchUpdate>(&m_cursor->events.pinch_update,
+                                             this);
+    m_pinchEnd.bind<&MuWM::onPinchEnd>(&m_cursor->events.pinch_end, this);
+
     m_contentType = wlr_content_type_manager_v1_create(m_display, 1);
 
     m_tearing = wlr_tearing_control_manager_v1_create(m_display, 1);
@@ -3240,4 +3246,30 @@ MuWM::onDragIconDestroy(void *)
 {
     m_dragIconDestroy.unbind(); // match your Listener API
     refreshPointerFocus();      // the surface under the cursor may have changed
+}
+
+void
+MuWM::onPinchBegin(void *data)
+{
+    auto *ev = static_cast<wlr_pointer_pinch_begin_event *>(data);
+    notifyActivity();
+    wlr_pointer_gestures_v1_send_pinch_begin(m_pointerGestures, m_seat, ev->time_msec,
+                                             ev->fingers);
+}
+
+void
+MuWM::onPinchUpdate(void *data)
+{
+    auto *ev = static_cast<wlr_pointer_pinch_update_event *>(data);
+    wlr_pointer_gestures_v1_send_pinch_update(m_pointerGestures, m_seat, ev->time_msec,
+                                              ev->dx, ev->dy, ev->scale,
+                                              ev->rotation);
+}
+
+void
+MuWM::onPinchEnd(void *data)
+{
+    auto *ev = static_cast<wlr_pointer_pinch_end_event *>(data);
+    wlr_pointer_gestures_v1_send_pinch_end(m_pointerGestures, m_seat, ev->time_msec,
+                                           ev->cancelled);
 }

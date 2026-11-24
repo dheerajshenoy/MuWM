@@ -204,6 +204,9 @@ private:
     void onRequestStartDrag(void *data);
     void onStartDrag(void *data);
     void onDragIconDestroy(void *data);
+    void onPinchBegin(void *data);
+    void onPinchUpdate(void *data);
+    void onPinchEnd(void *data);
 
     void updateConstraint(wlr_surface *focus);
     void deactivateConstraint();
@@ -279,6 +282,7 @@ private:
     wlr_content_type_manager_v1 *m_contentType                = nullptr;
     wlr_tearing_control_manager_v1 *m_tearing                 = nullptr;
     wlr_security_context_manager_v1 *m_securityContext        = nullptr;
+    wlr_pointer_gestures_v1 *m_pointerGestures                = nullptr;
 
     Output *m_focusedOutput = nullptr;
     std::vector<Output *> m_outputs;
@@ -288,6 +292,9 @@ private:
 
     OutputListener m_outputListener;
 
+    Listener<MuWM> m_pinchBegin;
+    Listener<MuWM> m_pinchUpdate;
+    Listener<MuWM> m_pinchEnd;
     Listener<MuWM> m_cursorMotion;
     Listener<MuWM> m_cursorMotionAbs;
     Listener<MuWM> m_cursorButton;
