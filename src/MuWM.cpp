@@ -547,8 +547,7 @@ MuWM::applyOutputConfig(wlr_output_configuration_v1 *config, bool test)
     free(states);
 
     if (!ok)
-        wlr_log(WLR_ERROR, "Output config %s failed",
-                test ? "test" : "commit");
+        wlr_log(WLR_ERROR, "Output config %s failed", test ? "test" : "commit");
     if (!ok || test)
         return ok;
 
