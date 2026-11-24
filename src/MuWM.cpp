@@ -1408,8 +1408,15 @@ MuWM::arrangeLayers(wlr_output *wlrOutput)
                 wlr_scene_layer_surface_v1_configure(s->scene, &full, &usable);
             }
 
+    const wlr_box old = output->usableArea;
     output->usableArea = usable;
     updateFullscreenLayers(output); // new surfaces must respect fullscreen
+
+    // A bar appearing, closing or resizing changes the room left for windows.
+    // Hidden workspaces are re-arranged when they are switched to.
+    if (usable.x != old.x || usable.y != old.y || usable.width != old.width
+        || usable.height != old.height)
+        arrange(output->workspace);
 }
 
 // While an output shows a fullscreen window, its top-layer surfaces (bars)
