@@ -647,16 +647,23 @@ luaSetMasterRatio(lua_State *L)
 
 // clang-format off
 /*lua
-  ---Move the focused window to a workspace by index
-  ---@param index integer The workspace index to move the window to
+  ---Move the focused window to a workspace by index or name
+  ---@param index integer|string The workspace index (1-based) or name
   function mu.window_to_workspace(index) end
 */
 // clang-format on
 int
 luaWindowToWorkspace(lua_State *L)
 {
-    const int index = static_cast<int>(luaL_checkinteger(L, 1));
-    wmFrom(L)->windowToWorkspace(index);
+    if (lua_type(L, 1) == LUA_TNUMBER)
+    {
+        const int index = static_cast<int>(luaL_checkinteger(L, 1));
+        wmFrom(L)->windowToWorkspace(index);
+    }
+    else if (lua_type(L, 1) == LUA_TSTRING)
+        wmFrom(L)->windowToWorkspace(lua_tostring(L, 1));
+    else
+        return luaL_error(L, "mu.window_to_workspace expects an integer or string");
     return 0;
 }
 

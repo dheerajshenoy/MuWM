@@ -104,8 +104,8 @@ function mu.focus_workspace(index) end
 ---@param ratio number The ratio, between 0 and 1
 function mu.set_master_ratio(ratio) end
 
----Move the focused window to a workspace by index
----@param index integer The workspace index to move the window to
+---Move the focused window to a workspace by index or name
+---@param index integer|string The workspace index (1-based) or name
 function mu.window_to_workspace(index) end
 
 ---Register an event handler
