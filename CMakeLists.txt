@@ -122,3 +122,21 @@ if(Python3_FOUND)
 else()
     message(STATUS "Python3 not found: lua-stubs target and test disabled")
 endif()
+
+# --- Install -------------------------------------------------------------------
+# `cmake --install build [--prefix <dir>]`. Honors DESTDIR for packaging.
+
+include(GNUInstallDirs)
+
+install(TARGETS ${PROJECT_NAME}
+    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
+
+# LuaLS stubs, for pointing an editor's `workspace.library` at.
+install(FILES lua/mu.lua
+    DESTINATION ${CMAKE_INSTALL_DATADIR}/${PROJECT_NAME}/lua
+)
+
+install(FILES README.md LICENSE
+    DESTINATION ${CMAKE_INSTALL_DOCDIR}
+)
