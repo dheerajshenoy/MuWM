@@ -7,6 +7,7 @@ Tiling Wayland compositor in C++ on wlroots (CMake).
 - [ ] More layouts (monocle, grid) and a way to switch
 - [ ] Window capture of windows on hidden workspaces (their scene node is disabled, so the frame is blank)
 - [ ] xdg-activation, pointer-constraints (games)
+- [ ] Explicit sync (`wlr_linux_drm_syncobj_manager_v1`; needs the DRM fd and a renderer with timeline support)
 - [ ] Run from a TTY (DRM/KMS backend, libseat)
 - [ ] Output and input hotplug (add and remove)
 - [ ] Session entry: `/usr/share/wayland-sessions/muwm.desktop`, `XDG_CURRENT_DESKTOP`, `XDG_SESSION_TYPE`, dbus activation environment
