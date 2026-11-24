@@ -72,6 +72,7 @@ MuWM::~MuWM()
     m_sessionActive.unbind();
     m_workspaceCommit.unbind();
     m_newInhibitor.unbind();
+    m_outputPowerSetMode.unbind();
 
     if (m_outputListener.listener.link.prev)
         wl_list_remove(&m_outputListener.listener.link);
