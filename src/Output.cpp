@@ -41,6 +41,7 @@ Output::onDestroy(void *)
     }
     wm->removeOutput(this);
     wm->publishOutputConfig(); // this output is no longer in m_outputs
+    wm->ensureActiveOutput();
     for (Workspace *ws : workspaces)
     {
         if (ws->sceneTree)

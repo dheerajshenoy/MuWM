@@ -46,6 +46,7 @@ public:
     void arrange();
     void arrange(Workspace *workspace);
     void removeOutput(Output *output);
+    void ensureActiveOutput();
     wlr_ext_foreign_toplevel_list_v1 *foreignToplevelList() const
     {
         return m_foreignList;

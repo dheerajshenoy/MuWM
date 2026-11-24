@@ -516,6 +516,23 @@ MuWM::publishOutputConfig()
 bool
 MuWM::applyOutputConfig(wlr_output_configuration_v1 *config, bool test)
 {
+    // A disabled output may have no current mode; enabling it then needs one,
+    // so fall back to the preferred mode when the client didn't name any.
+    wlr_output_configuration_head_v1 *h;
+    wl_list_for_each(h, &config->heads, link)
+    {
+        wlr_output *wo = h->state.output;
+        wlr_log(WLR_INFO,
+                "Output config %s: %s %s mode=%p custom=%dx%d scale=%.2f pos=%d,%d",
+                test ? "test" : "apply", wo->name,
+                h->state.enabled ? "enable" : "disable", (void *)h->state.mode,
+                h->state.custom_mode.width, h->state.custom_mode.height,
+                h->state.scale, h->state.x, h->state.y);
+        if (h->state.enabled && !h->state.mode
+            && h->state.custom_mode.width == 0)
+            h->state.mode = wlr_output_preferred_mode(wo);
+    }
+
     size_t n = 0;
     wlr_backend_output_state *states
         = wlr_output_configuration_v1_build_state(config, &n);
@@ -529,6 +546,9 @@ MuWM::applyOutputConfig(wlr_output_configuration_v1 *config, bool test)
         wlr_output_state_finish(&states[i].base);
     free(states);
 
+    if (!ok)
+        wlr_log(WLR_ERROR, "Output config %s failed",
+                test ? "test" : "commit");
     if (!ok || test)
         return ok;
 
@@ -540,7 +560,17 @@ MuWM::applyOutputConfig(wlr_output_configuration_v1 *config, bool test)
         const wlr_output_head_v1_state &s = head->state;
         if (s.enabled)
         {
-            wlr_output_layout_add(m_layout, s.output, s.x, s.y);
+            // An output that was disabled left the layout and took its scene
+            // link with it, so tie the scene output to the new entry again.
+            const bool rejoin = !wlr_output_layout_get(m_layout, s.output);
+            auto *lo = wlr_output_layout_add(m_layout, s.output, s.x, s.y);
+            if (rejoin && s.output->data)
+            {
+                auto *out = static_cast<Output *>(s.output->data);
+                wlr_scene_output_layout_add_output(m_sceneLayout, lo,
+                                                   out->sceneOutput);
+            }
+            wlr_output_schedule_frame(s.output);
             wlr_xcursor_manager_load(m_xcursor, s.scale);
         }
         else
@@ -1423,6 +1453,41 @@ MuWM::evacuateInactiveOutputs()
             for (Toplevel *t : std::vector<Toplevel *>(ws->toplevels))
                 toplevelToWorkspace(t, fallback->workspace);
     }
+}
+
+// When the last active output goes away (unplugging a dock while the laptop
+// panel is disabled) nothing would be shown, and the profile that re-enables
+// the panel may be applied while the dock is still tearing down and fail.
+// Turn on a remaining output ourselves.
+void
+MuWM::ensureActiveOutput()
+{
+    if (m_outputs.empty())
+        return;
+    for (Output *o : m_outputs)
+        if (wlr_output_layout_get(m_layout, o->output))
+            return;
+
+    Output *o = m_outputs.front();
+    wlr_output_state state;
+    wlr_output_state_init(&state);
+    wlr_output_state_set_enabled(&state, true);
+    if (wlr_output_mode *mode = wlr_output_preferred_mode(o->output))
+        wlr_output_state_set_mode(&state, mode);
+    wlr_output_state_set_scale(&state, m_config.scale);
+    const bool ok = wlr_output_commit_state(o->output, &state);
+    wlr_output_state_finish(&state);
+    if (!ok)
+    {
+        wlr_log(WLR_ERROR, "No active output left and enabling %s failed",
+                o->output->name);
+        return;
+    }
+
+    auto *lo = wlr_output_layout_add_auto(m_layout, o->output);
+    wlr_scene_output_layout_add_output(m_sceneLayout, lo, o->sceneOutput);
+    wlr_output_schedule_frame(o->output);
+    wlr_log(WLR_INFO, "No active output left, enabled %s", o->output->name);
 }
 
 void
