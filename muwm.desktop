@@ -1,0 +1,6 @@
+[Desktop Entry]
+Name=MuWM
+Comment=An extensible Wayland compositor
+Exec=muwm
+Type=Application
+DesktopNames=muwm;wlroots
