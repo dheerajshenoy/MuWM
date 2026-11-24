@@ -56,6 +56,7 @@
 ---@field border mu.opts.border Window border options.
 ---@field layout mu.opts.layout Layout options.
 ---@field new_client_position mu.NewClientPosition Where a new window is inserted in the layout.
+---@field workspaces string[] Workspace names; their number is the workspace count.
 
 ---@class mu.opts.touchpad
 ---@field natural_scroll boolean Whether to enable natural scrolling on the touchpad.
@@ -96,7 +97,7 @@ function mu.focus_output(dir) end
 function mu.move_to_output(dir) end
 
 ---Focus a workspace by index
----@param index integer The workspace index to focus
+---@param index integer|string The workspace index (1-based) or name
 function mu.focus_workspace(index) end
 
 ---Set the ratio of the master area to the whole screen

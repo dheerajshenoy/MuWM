@@ -3,6 +3,7 @@
 #include "lua.hpp"
 
 #include <string>
+#include <vector>
 
 enum class NewClientPosition
 {
@@ -17,6 +18,8 @@ struct Config
     NewClientPosition new_client_position = NewClientPosition::AfterCurrent;
 
     float scale = 1.0f;
+
+    std::vector<std::string> workspaces = {"1", "2", "3", "4", "5", "6", "7", "8", "9"};
 
     struct Gaps
     {

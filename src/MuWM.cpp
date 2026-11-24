@@ -442,42 +442,19 @@ MuWM::handleNewOutput(wlr_output *output)
     o->destroy.bind<&Output::onDestroy>(&output->events.destroy, o);
     o->requestState.bind<&Output::onRequestState>(&output->events.request_state,
                                                   o);
-    for (int i = 1; i <= 9; i++)
-    {
-        Workspace *w = new Workspace{};
-        w->name      = std::to_string(i);
-        auto *tree   = wlr_scene_tree_create(m_windowTree);
-        wlr_scene_node_set_enabled(
-            &tree->node, i == 1); // only the first workspace is visible
-        w->sceneTree = tree;
-        w->output    = o;
-        o->workspaces.push_back(w);
-    }
-
-    o->workspace = o->workspaces[0];
-
     // The workspace group is a handle that clients can use to find all the
-    // workspaces on this output.
+    // workspaces on this output. It must exist before the workspaces, which
+    // join it.
     o->group = wlr_ext_workspace_group_handle_v1_create(m_workspaceManager, 0);
     wlr_ext_workspace_group_handle_v1_output_enter(o->group, output);
 
-    for (Workspace *w : o->workspaces)
-    {
-        // The id must be unique for the compositor's lifetime, so include the
-        // output.
-        const std::string id = std::string(output->name) + "-" + w->name;
+    const auto &names = m_config.workspaces;
+    for (size_t i = 0; i < names.size(); i++)
+        createWorkspace(o, names[i], i);
 
-        w->handle = wlr_ext_workspace_handle_v1_create(
-            m_workspaceManager, id.c_str(),
-            EXT_WORKSPACE_HANDLE_V1_WORKSPACE_CAPABILITIES_ACTIVATE);
-        w->handle->data = w;
-        wlr_ext_workspace_handle_v1_set_name(w->handle, w->name.c_str());
-        wlr_ext_workspace_handle_v1_set_group(w->handle, o->group);
-
-        const uint32_t coord
-            = std::stoi(w->name) - 1; // optional: lets bars sort them
-        wlr_ext_workspace_handle_v1_set_coordinates(w->handle, &coord, 1);
-    }
+    // Only the first workspace is visible.
+    o->workspace = o->workspaces[0];
+    wlr_scene_node_set_enabled(&o->workspace->sceneTree->node, true);
 
     wlr_ext_workspace_handle_v1_set_active(o->workspace->handle, true);
 
@@ -1628,6 +1605,9 @@ MuWM::applyPending()
 
     if (changes & (ChangeKeyboard | ChangePointer))
         applyDeviceConfig(changes);
+
+    if (changes & ChangeWorkspace)
+        applyWorkspaces();
 }
 
 void
@@ -1894,6 +1874,21 @@ MuWM::focusWorkspace(int n)
 }
 
 void
+MuWM::focusWorkspace(const std::string &name)
+{
+    if (!m_focusedOutput)
+        return;
+
+    auto &workspaces = m_focusedOutput->workspaces;
+    auto it = std::find_if(workspaces.begin(), workspaces.end(),
+                           [&](Workspace *ws) { return ws->name == name; });
+    if (it == workspaces.end())
+        return;
+
+    switchWorkspace(m_focusedOutput, *it);
+}
+
+void
 MuWM::windowToWorkspace(int index)
 {
     if (!m_focusedOutput)
@@ -1904,6 +1899,23 @@ MuWM::windowToWorkspace(int index)
         return;
 
     Workspace *ws_target = workspaces[index - 1];
+    if (Toplevel *t = focusedToplevel())
+        toplevelToWorkspace(t, ws_target);
+}
+
+void
+MuWM::windowToWorkspace(const std::string &name)
+{
+    if (!m_focusedOutput)
+        return;
+
+    auto &workspaces = m_focusedOutput->workspaces;
+    auto it = std::find_if(workspaces.begin(), workspaces.end(),
+                           [&](Workspace *ws) { return ws->name == name; });
+    if (it == workspaces.end())
+        return;
+
+    Workspace *ws_target = *it;
     if (Toplevel *t = focusedToplevel())
         toplevelToWorkspace(t, ws_target);
 }
@@ -2886,4 +2898,71 @@ MuWM::adjacentOutput(wlr_direction dir)
         m_layout, dir, m_focusedOutput->output, box.x + box.width / 2.0,
         box.y + box.height / 2.0);
     return next && next->data ? static_cast<Output *>(next->data) : nullptr;
+}
+
+Workspace *
+MuWM::createWorkspace(Output *o, const std::string &name, size_t index)
+{
+    auto *w      = new Workspace{};
+    w->name      = name;
+    w->output    = o;
+    w->sceneTree = wlr_scene_tree_create(m_windowTree);
+    wlr_scene_node_set_enabled(&w->sceneTree->node,
+                               false); // the caller shows one
+
+    // The id must stay unique and stable, so use the index, not the name.
+    const std::string id
+        = std::string(o->output->name) + "-" + std::to_string(index + 1);
+    w->handle = wlr_ext_workspace_handle_v1_create(
+        m_workspaceManager, id.c_str(),
+        EXT_WORKSPACE_HANDLE_V1_WORKSPACE_CAPABILITIES_ACTIVATE);
+    w->handle->data = w;
+    wlr_ext_workspace_handle_v1_set_name(w->handle, name.c_str());
+    wlr_ext_workspace_handle_v1_set_group(w->handle, o->group);
+    const uint32_t coord = static_cast<uint32_t>(index);
+    wlr_ext_workspace_handle_v1_set_coordinates(w->handle, &coord, 1);
+
+    o->workspaces.push_back(w);
+    return w;
+}
+
+void
+MuWM::applyWorkspaces()
+{
+    const auto &names = m_config.workspaces;
+
+    for (Output *o : m_outputs)
+    {
+        // Shrinking: first make sure we are not sitting on a workspace that
+        // is about to disappear, then move its windows to the last kept one.
+        while (o->workspaces.size() > names.size())
+        {
+            Workspace *gone = o->workspaces.back();
+            Workspace *keep = o->workspaces[names.size() - 1];
+
+            if (o->workspace == gone)
+                switchWorkspace(o, keep);
+            for (Toplevel *t : std::vector<Toplevel *>(gone->toplevels))
+                toplevelToWorkspace(t, keep);
+
+            wlr_ext_workspace_handle_v1_destroy(gone->handle);
+            wlr_scene_node_destroy(&gone->sceneTree->node);
+            o->workspaces.pop_back();
+            delete gone;
+        }
+
+        // Renaming what stays, growing what is missing.
+        for (size_t i = 0; i < names.size(); i++)
+        {
+            if (i < o->workspaces.size())
+            {
+                o->workspaces[i]->name = names[i];
+                wlr_ext_workspace_handle_v1_set_name(o->workspaces[i]->handle,
+                                                     names[i].c_str());
+            }
+            else
+                createWorkspace(o, names[i], i);
+        }
+    }
+    arrange();
 }

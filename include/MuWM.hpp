@@ -74,7 +74,9 @@ public:
     void workspacePrev();
     void close();
     void focusWorkspace(int index);
+    void focusWorkspace(const std::string &name);
     void windowToWorkspace(int index);
+    void windowToWorkspace(const std::string &name);
     void toggleFullscreen();
     void toggleFloating();
     void setFloating(Toplevel *, bool floating);
@@ -86,11 +88,12 @@ public:
 
     enum Change
     {
-        ChangeNone     = 0,
-        ChangeLayout   = 1 << 0, // gaps, border width
-        ChangeRecolor  = 1 << 1, // border colors
-        ChangePointer  = 1 << 2, // touchpad / pointer options
-        ChangeKeyboard = 1 << 3, // keymap, repeat rate
+        ChangeNone      = 0,
+        ChangeLayout    = 1 << 0, // gaps, border width
+        ChangeRecolor   = 1 << 1, // border colors
+        ChangePointer   = 1 << 2, // touchpad / pointer options
+        ChangeKeyboard  = 1 << 3, // keymap, repeat rate
+        ChangeWorkspace = 1 << 4, // workspaces name / count
     };
     void scheduleApply(int changes);
 
@@ -222,6 +225,9 @@ private:
     void endGrab();
     void insertNewTopLevel(std::vector<Toplevel *> &toplevels, Toplevel *t);
     Output *adjacentOutput(wlr_direction dir);
+    Workspace *createWorkspace(Output *o, const std::string &name,
+                               size_t index);
+    void applyWorkspaces();
 
 private:
     bool m_ok = false;

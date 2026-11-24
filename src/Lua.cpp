@@ -28,6 +28,7 @@ struct Field
         Int,
         Color,
         Sub,
+        StringList,
         Func
     } kind;
     const char *name;
@@ -57,6 +58,12 @@ intField(const char *name, int *p, int min = INT_MIN, int max = INT_MAX,
          int changes = 0)
 {
     return {Field::Int, name, p, nullptr, changes, min, max};
+}
+
+Field
+stringListField(const char *name, std::vector<std::string> *p, int changes = 0)
+{
+    return {Field::StringList, name, p, nullptr, changes};
 }
 
 Field
@@ -226,6 +233,25 @@ setField(lua_State *L, const Group *g, const char *key, int val)
 
     switch (f->kind)
     {
+        case Field::StringList:
+        {
+            expectType(L, val, LUA_TTABLE, key, "a table of strings");
+            std::vector<std::string> tmp;
+            lua_pushnil(L);
+            while (lua_next(L, val) != 0)
+            {
+                if (lua_type(L, -1) != LUA_TSTRING)
+                    luaL_error(L, "option '%s': all entries must be strings",
+                               key);
+                tmp.push_back(lua_tostring(L, -1));
+                lua_pop(L, 1);
+            }
+            if (tmp.empty())
+                luaL_error(L, "option '%s' needs at least one name", key);
+            *static_cast<std::vector<std::string> *>(f->ptr) = std::move(tmp);
+            break;
+        }
+
         case Field::Enum:
         {
             expectType(L, val, LUA_TSTRING, key, "a string");
@@ -371,6 +397,23 @@ pushField(lua_State *L, const Field *f)
 {
     switch (f->kind)
     {
+        case Field::StringList:
+        {
+            lua_createtable(
+                L,
+                static_cast<int>(
+                    static_cast<std::vector<std::string> *>(f->ptr)->size()),
+                0);
+            int i = 1;
+            for (const std::string &s :
+                 *static_cast<std::vector<std::string> *>(f->ptr))
+            {
+                lua_pushstring(L, s.c_str());
+                lua_rawseti(L, -2, i++);
+            }
+            break;
+        }
+
         case Field::Enum:
             lua_pushstring(
                 L, f->enum_names->at(*static_cast<int *>(f->ptr)).c_str());
@@ -565,15 +608,25 @@ luaMoveToOutput(lua_State *L)
 // clang-format off
 /*lua
   ---Focus a workspace by index
-  ---@param index integer The workspace index to focus
+  ---@param index integer|string The workspace index (1-based) or name
   function mu.focus_workspace(index) end
 */
 // clang-format on
 int
 luaFocusWorkspace(lua_State *L)
 {
-    const int index = static_cast<int>(luaL_checkinteger(L, 1));
-    wmFrom(L)->focusWorkspace(index);
+    if (lua_type(L, 1) == LUA_TNUMBER)
+    {
+        const int index = static_cast<int>(luaL_checkinteger(L, 1));
+        wmFrom(L)->focusWorkspace(index);
+    }
+    else if (lua_type(L, 1) == LUA_TSTRING)
+    {
+        const char *name = lua_tostring(L, 1);
+        wmFrom(L)->focusWorkspace(name);
+    }
+    else
+        luaL_error(L, "mu.focus_workspace expects an integer or string");
     return 0;
 }
 
@@ -955,6 +1008,12 @@ MuWM::initLuaBindings()
         // window is inserted in the layout.
         enumField("new_client_position", &m_config.new_client_position,
                   &kNewClientPositionNames, MuWM::ChangeLayout),
+
+        // lua ---@field workspaces string[] Workspace names; their number is the
+        // workspace count.
+        stringListField("workspaces", &m_config.workspaces,
+                        MuWM::ChangeWorkspace),
+
     };
     // clang-format on
 
