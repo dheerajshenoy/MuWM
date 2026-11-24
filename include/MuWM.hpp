@@ -238,6 +238,7 @@ private:
     wlr_pointer_constraints_v1 *m_constraints          = nullptr;
     wlr_relative_pointer_manager_v1 *m_relativePointer = nullptr;
     wlr_pointer_constraint_v1 *m_activeConstraint      = nullptr;
+    wlr_linux_dmabuf_v1 *m_dmabuf                      = nullptr;
 
     Output *m_focusedOutput = nullptr;
     std::vector<Output *> m_outputs;

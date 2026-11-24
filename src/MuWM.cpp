@@ -146,11 +146,18 @@ MuWM::init()
         return false;
     }
 
-    if (!wlr_renderer_init_wl_display(m_renderer, m_display))
+    if (!wlr_renderer_init_wl_shm(m_renderer, m_display))
     {
-        wlr_log(WLR_ERROR, "Failed to init renderer wl_display globals");
+        wlr_log(WLR_ERROR, "Failed to init wl_shm");
         return false;
     }
+
+    if (wlr_renderer_get_texture_formats(m_renderer, WLR_BUFFER_CAP_DMABUF))
+        m_dmabuf = wlr_linux_dmabuf_v1_create_with_renderer(m_display, 5,
+                                                            m_renderer);
+    else
+        wlr_log(WLR_INFO,
+                "Renderer can't import dmabufs; linux-dmabuf disabled");
 
     m_allocator = wlr_allocator_autocreate(m_backend, m_renderer);
     if (!m_allocator)
@@ -175,13 +182,8 @@ MuWM::init()
         return false;
     }
 
-    wlr_renderer_init_wl_shm(m_renderer, m_display);
-    if (wlr_renderer_get_texture_formats(m_renderer, WLR_BUFFER_CAP_DMABUF))
-    {
-        auto *dmabuf = wlr_linux_dmabuf_v1_create_with_renderer(m_display, 5,
-                                                                m_renderer);
-        wlr_scene_set_linux_dmabuf_v1(m_scene, dmabuf);
-    }
+    if (m_dmabuf)
+        wlr_scene_set_linux_dmabuf_v1(m_scene, m_dmabuf);
 
     m_sceneLayout = wlr_scene_attach_output_layout(m_scene, m_layout);
 
@@ -2424,8 +2426,8 @@ MuWM::refreshPointerFocus()
 {
     timespec now;
     clock_gettime(CLOCK_MONOTONIC, &now);
-    processMotion(static_cast<uint32_t>(now.tv_sec * 1000
-                                        + now.tv_nsec / 1000000));
+    processMotion(
+        static_cast<uint32_t>(now.tv_sec * 1000 + now.tv_nsec / 1000000));
 }
 
 void
