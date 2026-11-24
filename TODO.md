@@ -20,3 +20,4 @@ Tiling Wayland compositor in C++ on wlroots (CMake).
 - [ ] AUR PKGBUILD; decide which wlroots version to depend on (the API changes between releases)
 - [ ] text-input-v3 + input-method-v2: IME support, e.g. fcitx.
 - [ ] virtual-keyboard + virtual-pointer: wtype, ydotool-style automation.
+- [ ] Clear the urgent signal after focus
