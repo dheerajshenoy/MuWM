@@ -30,6 +30,7 @@ struct Toplevel
     uint64_t id                                       = 0;
     bool fullscreen                                   = false;
     bool floating                                     = false;
+    wlr_box slot = {}; // size the layout asked for; the borders never exceed it
 
     // The size limits seen at the last commit, to notice when a client changes
     // them after mapping.
@@ -53,6 +54,7 @@ struct Toplevel
     void destroyForeignHandle();
     void clampSize(int &w, int &h) const;
     void setTiled(bool tiled);
+    void fitBorders();
 
     void setFocused(bool focused);
     void resizeBorders(int w, int h);

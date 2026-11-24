@@ -175,6 +175,14 @@ MuWM::init()
         return false;
     }
 
+    wlr_renderer_init_wl_shm(m_renderer, m_display);
+    if (wlr_renderer_get_texture_formats(m_renderer, WLR_BUFFER_CAP_DMABUF))
+    {
+        auto *dmabuf = wlr_linux_dmabuf_v1_create_with_renderer(m_display, 5,
+                                                                m_renderer);
+        wlr_scene_set_linux_dmabuf_v1(m_scene, dmabuf);
+    }
+
     m_sceneLayout = wlr_scene_attach_output_layout(m_scene, m_layout);
 
     // Children stack in creation order, so this fixes the layer ordering.
@@ -942,6 +950,7 @@ MuWM::removeToplevel(Toplevel *t)
             ws->focusedToplevel = ws->focusHistory.back(); // hidden workspace
     }
 
+    refreshPointerFocus(); // the cursor may now be over something else
     m_eventBus.emit(EventType::WindowClose, closed);
 }
 
@@ -969,11 +978,12 @@ MuWM::arrange(Workspace *ws)
     auto place = [](Toplevel *t, int x, int y, int w, int h, bool borders)
     {
         t->clampSize(w, h);
+        t->slot = {x, y, w, h};
         wlr_scene_node_set_position(&t->tree->node, x, y);
         t->setSize(w, h);
         t->setBordersVisible(borders);
         if (borders)
-            t->resizeBorders(w, h);
+            t->fitBorders();
     };
 
     // A fullscreen window gets the whole output (bars included) and nothing
@@ -1732,6 +1742,7 @@ MuWM::switchWorkspace(Output *out, Workspace *ws_target)
     m_focusedOutput = out;
 
     arrange(ws_target);
+    refreshPointerFocus();
 
     Toplevel *next = ws_target->focusedToplevel;
     if (!next && !ws_target->toplevels.empty())
@@ -1891,10 +1902,11 @@ MuWM::placeFloating(Toplevel *t)
 {
     wlr_box &b = t->floatBox;
     t->clampSize(b.width, b.height);
+    t->slot = b;
     wlr_scene_node_set_position(&t->tree->node, b.x, b.y);
     t->setSize(b.width, b.height);
     t->setBordersVisible(true);
-    t->resizeBorders(b.width, b.height);
+    t->fitBorders();
 }
 
 void
@@ -2385,6 +2397,17 @@ MuWM::releaseUnmanagedFocus(XUnmanaged *u)
         wlr_xwayland_surface_activate(u->xsurface, false);
     if (!m_locked)
         restoreKeyboardFocus(); // layer surface, window, or nothing
+}
+
+// The pointer focus and cursor image are only updated on motion. When windows
+// change under a stationary cursor, redo that now.
+void
+MuWM::refreshPointerFocus()
+{
+    timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    processMotion(static_cast<uint32_t>(now.tv_sec * 1000
+                                        + now.tv_nsec / 1000000));
 }
 
 void

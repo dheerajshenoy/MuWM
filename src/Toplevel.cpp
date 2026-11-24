@@ -65,6 +65,10 @@ Toplevel::onCommit(void *)
             !floating); // tell the client its edges are held by the compositor
     }
 
+    // The client's real size is only known once it commits.
+    if (workspace && !fullscreen)
+        fitBorders();
+
     // A client may change its min/max size at any time. Re-lay out so the
     // window is clamped to the new limits.
     const auto &c = xdg->current;
@@ -347,6 +351,20 @@ Toplevel::clampSize(int &w, int &h) const
         w = std::max(w, minW);
     if (minH > 0)
         h = std::max(h, minH);
+}
+
+// A client may ignore the size it was given. Draw the borders around what it
+// actually has, never larger than what the layout asked for.
+void
+Toplevel::fitBorders()
+{
+    const wlr_box geo = geometry();
+    // Until the client commits a buffer its size is unknown; assume it obeyed.
+    const int w = (geo.width > 0 && geo.width < slot.width) ? geo.width
+                                                            : slot.width;
+    const int h = (geo.height > 0 && geo.height < slot.height) ? geo.height
+                                                               : slot.height;
+    resizeBorders(w, h);
 }
 
 void

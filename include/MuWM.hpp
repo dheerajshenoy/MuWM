@@ -180,6 +180,7 @@ private:
 
     void updateConstraint(wlr_surface *focus);
     void deactivateConstraint();
+    void refreshPointerFocus();
     bool constrainMotion(double &dx, double &dy); // false = pointer is locked
     void startLock();
     void createLockCover(Output *);
