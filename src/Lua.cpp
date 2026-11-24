@@ -4,6 +4,7 @@
 #include "MuWM.hpp"
 
 #include <cctype>
+#include <cfloat>
 #include <climits>
 #include <cmath>
 #include <cstring>
@@ -36,6 +37,8 @@ struct Field
     int min          = INT_MIN;
     int max          = INT_MAX;
     const std::vector<std::string> *enum_names = nullptr; // for Kind::Enum
+    float fmin = -FLT_MAX; // range for Kind::Float
+    float fmax = FLT_MAX;
 };
 
 struct Group
@@ -71,9 +74,11 @@ boolField(const char *name, bool *p, int changes = 0)
 }
 
 Field
-floatField(const char *name, float *p, int changes = 0)
+floatField(const char *name, float *p, int changes = 0, float fmin = -FLT_MAX,
+           float fmax = FLT_MAX)
 {
-    return {Field::Float, name, p, nullptr, changes};
+    return {Field::Float, name,    p,       nullptr, changes,
+            INT_MIN,      INT_MAX, nullptr, fmin,    fmax};
 }
 
 Field
@@ -231,9 +236,21 @@ setField(lua_State *L, const Group *g, const char *key, int val)
                     *static_cast<int *>(f->ptr) = i;
                     goto done;
                 }
-            luaL_error(L, "option '%s' expects one of:", key);
-            for (int i = 0; i < (int)f->enum_names->size(); i++)
-                luaL_error(L, "  %s", f->enum_names + i * 32);
+            {
+                // Built with a Lua buffer: luaL_error doesn't return, so no
+                // std::string may be alive here.
+                luaL_Buffer b;
+                luaL_buffinit(L, &b);
+                for (size_t i = 0; i < f->enum_names->size(); i++)
+                {
+                    if (i)
+                        luaL_addstring(&b, ", ");
+                    luaL_addstring(&b, f->enum_names->at(i).c_str());
+                }
+                luaL_pushresult(&b);
+                luaL_error(L, "option '%s' expects one of: %s", key,
+                           lua_tostring(L, -1));
+            }
         done:
             break;
         }
@@ -241,8 +258,12 @@ setField(lua_State *L, const Group *g, const char *key, int val)
         case Field::Float:
         {
             expectType(L, val, LUA_TNUMBER, key, "a number");
-            *static_cast<float *>(f->ptr)
-                = static_cast<float>(lua_tonumber(L, val));
+            const lua_Number n = lua_tonumber(L, val);
+            if (!(n >= f->fmin && n <= f->fmax)) // also rejects NaN
+                luaL_error(L, "option '%s' must be between %g and %g", key,
+                           static_cast<double>(f->fmin),
+                           static_cast<double>(f->fmax));
+            *static_cast<float *>(f->ptr) = static_cast<float>(n);
             break;
         }
 
@@ -712,13 +733,13 @@ callRef(lua_State *L, int ref, const EventData &data)
 /*lua
   ---Register an event handler
   ---@param event mu.Event The event name
-  ---@param handler fun(window: mu.Window) The handler function; window events pass a table describing the window
+  ---@param handler fun(window?: mu.Window) The handler function; window events pass a table describing the window, startup and config_reload pass nothing
   ---@return integer id The handler ID, which can be used to remove it with mu.off(id)
   function mu.on(event, handler) end
 
   ---Register a one-time event handler
   ---@param event mu.Event The event name
-  ---@param handler fun(window: mu.Window) The handler function; window events pass a table describing the window
+  ---@param handler fun(window?: mu.Window) The handler function; window events pass a table describing the window, startup and config_reload pass nothing
   ---@return integer id The handler ID, which can be used to remove it with mu.off(id)
   function mu.once(event, handler) end
 */
@@ -869,7 +890,7 @@ MuWM::initLuaBindings()
         // lua ---@field master_ratio number The ratio of the master area to the
         // whole screen. Must be between 0 and 1.
         floatField("master_ratio", &m_config.layout.master_ratio,
-                   MuWM::ChangeLayout),
+                   MuWM::ChangeLayout, 0.0f, 1.0f),
 
     };
 

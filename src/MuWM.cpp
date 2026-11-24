@@ -2049,6 +2049,7 @@ MuWM::setMasterRatio(float ratio)
 {
     if (ratio < 0.0f || ratio > 1.0f)
         return;
+    m_config.layout.master_ratio = ratio;
     scheduleApply(ChangeLayout);
 }
 

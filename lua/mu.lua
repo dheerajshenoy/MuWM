@@ -109,13 +109,13 @@ function mu.window_to_workspace(index) end
 
 ---Register an event handler
 ---@param event mu.Event The event name
----@param handler fun(window: mu.Window) The handler function; window events pass a table describing the window
+---@param handler fun(window?: mu.Window) The handler function; window events pass a table describing the window, startup and config_reload pass nothing
 ---@return integer id The handler ID, which can be used to remove it with mu.off(id)
 function mu.on(event, handler) end
 
 ---Register a one-time event handler
 ---@param event mu.Event The event name
----@param handler fun(window: mu.Window) The handler function; window events pass a table describing the window
+---@param handler fun(window?: mu.Window) The handler function; window events pass a table describing the window, startup and config_reload pass nothing
 ---@return integer id The handler ID, which can be used to remove it with mu.off(id)
 function mu.once(event, handler) end
 
