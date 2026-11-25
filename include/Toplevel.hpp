@@ -16,7 +16,7 @@ struct Toplevel
     wlr_scene_rect *border[4]      = {};      // top, bottom, left, right
     wlr_box floatBox               = {};
     wlr_foreign_toplevel_handle_v1 *wlrHandle = nullptr; // while mapped
-
+    wlr_xdg_toplevel_icon_v1 *icon            = nullptr; // referenced
     Listener<Toplevel> map;
     Listener<Toplevel> unmap;
     Listener<Toplevel> commit;

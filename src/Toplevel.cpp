@@ -123,6 +123,11 @@ Toplevel::onUnmap(void *)
 void
 Toplevel::onDestroy(void *)
 {
+    if (icon)
+    {
+        wlr_xdg_toplevel_icon_v1_unref(icon);
+        icon = nullptr;
+    }
     destroyForeignHandle();
     destroyWlrHandle();
     wm->removeToplevel(this);

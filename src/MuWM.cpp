@@ -389,6 +389,12 @@ MuWM::init()
 
     wlr_presentation_create(m_display, m_backend, 2);
 
+    wlr_alpha_modifier_v1_create(m_display);
+    // wlr_xdg_system_bell_v1_create(m_display, 1);
+    wlr_xdg_toplevel_tag_manager_v1_create(m_display, 1);
+    m_iconManager = wlr_xdg_toplevel_icon_manager_v1_create(m_display, 1);
+    m_setIcon.bind<&MuWM::onSetIcon>(&m_iconManager->events.set_icon, this);
+
     m_pointerGestures = wlr_pointer_gestures_v1_create(m_display);
     m_pinchBegin.bind<&MuWM::onPinchBegin>(&m_cursor->events.pinch_begin, this);
     m_pinchUpdate.bind<&MuWM::onPinchUpdate>(&m_cursor->events.pinch_update,
@@ -953,7 +959,6 @@ MuWM::currentWorkspace()
 void
 MuWM::focusToplevel(Toplevel *t, bool raise)
 {
-
     Toplevel *oldFocus = focusedToplevel();
 
     if (oldFocus == t)
@@ -3317,4 +3322,19 @@ MuWM::onPinchEnd(void *data)
     auto *ev = static_cast<wlr_pointer_pinch_end_event *>(data);
     wlr_pointer_gestures_v1_send_pinch_end(m_pointerGestures, m_seat,
                                            ev->time_msec, ev->cancelled);
+}
+
+void
+MuWM::onSetIcon(void *data)
+{
+    auto *ev
+        = static_cast<wlr_xdg_toplevel_icon_manager_v1_set_icon_event *>(data);
+    Toplevel *t
+        = toplevelFromSurface(ev->toplevel->base->surface); // check signature
+    if (!t)
+        return;
+
+    if (t->icon)
+        wlr_xdg_toplevel_icon_v1_unref(t->icon);
+    t->icon = ev->icon ? wlr_xdg_toplevel_icon_v1_ref(ev->icon) : nullptr;
 }

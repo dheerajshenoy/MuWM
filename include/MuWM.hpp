@@ -208,6 +208,7 @@ private:
     void onPinchBegin(void *data);
     void onPinchUpdate(void *data);
     void onPinchEnd(void *data);
+    void onSetIcon(void *data);
 
     void updateConstraint(wlr_surface *focus);
     void deactivateConstraint();
@@ -245,31 +246,28 @@ private:
     void installDefaultBindings();
     const argparse::ArgumentParser &m_parser;
 
-    wl_display *m_display                  = nullptr;
-    wlr_backend *m_backend                 = nullptr;
-    wlr_renderer *m_renderer               = nullptr;
-    wlr_compositor *m_compositor           = nullptr;
-    wlr_xwayland *m_xwayland               = nullptr;
-    wlr_allocator *m_allocator             = nullptr;
-    wlr_scene *m_scene                     = nullptr;
-    wlr_output_layout *m_layout            = nullptr;
-    wlr_scene_output_layout *m_sceneLayout = nullptr;
-    wlr_seat *m_seat                       = nullptr;
-    wlr_xdg_shell *m_xdgShell              = nullptr;
-    wlr_cursor *m_cursor                   = nullptr;
-    wlr_xcursor_manager *m_xcursor         = nullptr;
-    bool m_cursorIsDefault                 = false; // skip redundant resets
-
-    wlr_xdg_decoration_manager_v1 *m_decoManager      = nullptr;
-    wlr_layer_shell_v1 *m_layerShell                  = nullptr;
-    wlr_output_manager_v1 *m_outputManager            = nullptr;
-    wlr_cursor_shape_manager_v1 *m_cursorShapeManager = nullptr;
-    wlr_ext_foreign_toplevel_list_v1 *m_foreignList   = nullptr;
-    wlr_session_lock_manager_v1 *m_lockManager        = nullptr;
-    wlr_session *m_session                            = nullptr;
-    wlr_session_lock_v1 *m_lock                       = nullptr;
-    wlr_ext_foreign_toplevel_image_capture_source_manager_v1
-        *m_toplevelCaptureManager                             = nullptr;
+    wl_display *m_display                                     = nullptr;
+    wlr_backend *m_backend                                    = nullptr;
+    wlr_renderer *m_renderer                                  = nullptr;
+    wlr_compositor *m_compositor                              = nullptr;
+    wlr_xwayland *m_xwayland                                  = nullptr;
+    wlr_allocator *m_allocator                                = nullptr;
+    wlr_scene *m_scene                                        = nullptr;
+    wlr_output_layout *m_layout                               = nullptr;
+    wlr_scene_output_layout *m_sceneLayout                    = nullptr;
+    wlr_seat *m_seat                                          = nullptr;
+    wlr_xdg_shell *m_xdgShell                                 = nullptr;
+    wlr_cursor *m_cursor                                      = nullptr;
+    wlr_xcursor_manager *m_xcursor                            = nullptr;
+    wlr_xdg_toplevel_icon_manager_v1 *m_iconManager           = nullptr;
+    wlr_xdg_decoration_manager_v1 *m_decoManager              = nullptr;
+    wlr_layer_shell_v1 *m_layerShell                          = nullptr;
+    wlr_output_manager_v1 *m_outputManager                    = nullptr;
+    wlr_cursor_shape_manager_v1 *m_cursorShapeManager         = nullptr;
+    wlr_ext_foreign_toplevel_list_v1 *m_foreignList           = nullptr;
+    wlr_session_lock_manager_v1 *m_lockManager                = nullptr;
+    wlr_session *m_session                                    = nullptr;
+    wlr_session_lock_v1 *m_lock                               = nullptr;
     wlr_xdg_activation_v1 *m_xdgActivation                    = nullptr;
     wlr_ext_workspace_manager_v1 *m_workspaceManager          = nullptr;
     wlr_pointer_constraints_v1 *m_constraints                 = nullptr;
@@ -285,6 +283,8 @@ private:
     wlr_tearing_control_manager_v1 *m_tearing                 = nullptr;
     wlr_security_context_manager_v1 *m_securityContext        = nullptr;
     wlr_pointer_gestures_v1 *m_pointerGestures                = nullptr;
+    wlr_ext_foreign_toplevel_image_capture_source_manager_v1
+        *m_toplevelCaptureManager = nullptr;
 
     Output *m_focusedOutput = nullptr;
     std::vector<Output *> m_outputs;
@@ -293,7 +293,7 @@ private:
     Workspace m_unassigned; // for toplevels that don't have an output yet
 
     OutputListener m_outputListener;
-
+    Listener<MuWM> m_setIcon;
     Listener<MuWM> m_pinchBegin;
     Listener<MuWM> m_pinchUpdate;
     Listener<MuWM> m_pinchEnd;
@@ -346,6 +346,7 @@ private:
     double m_grabY      = 0;
     wlr_box m_grabBox   = {}; // floatBox when the grab started
 
+    bool m_cursorIsDefault = false; // skip redundant resets
     Config m_config;
     std::vector<LayerShellSurface *> m_layerSurfaces;
     // An X11 menu that asked for the keyboard; it keeps it until it closes.

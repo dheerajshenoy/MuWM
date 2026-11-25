@@ -63,6 +63,10 @@ extern "C"
 #include <wlr/types/wlr_xdg_foreign_v2.h>
 #include <wlr/types/wlr_xdg_output_v1.h>
 #include <wlr/types/wlr_xdg_shell.h>
+#include <wlr/types/wlr_xdg_toplevel_icon_v1.h>
+// #include <wlr/types/wlr_xdg_system_bell_v1.h>
+#include <wlr/types/wlr_alpha_modifier_v1.h>
+#include <wlr/types/wlr_xdg_toplevel_tag_v1.h>
 #include <wlr/util/log.h>
 #include <wlr/util/region.h>
 // xwayland.h has a member called `class`. Include everything it pulls in first,
