@@ -26,6 +26,10 @@
 ---@field output string Name of the output the window is on.
 ---@field focused boolean Whether the window had focus.
 
+---@class mu.opts.cursor
+---@field size? integer Cursor size in pixels. Must be between 1 and 1000.
+---@field theme? string Cursor theme name.
+
 ---@class mu.opts.border
 ---@field width? integer Border width in pixels. Must be between 0 and 1000.
 ---@field focused? mu.Color Border color for the focused window.

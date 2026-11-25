@@ -95,6 +95,7 @@ public:
         ChangePointer   = 1 << 2, // touchpad / pointer options
         ChangeKeyboard  = 1 << 3, // keymap, repeat rate
         ChangeWorkspace = 1 << 4, // workspaces name / count
+        ChangeCursor    = 1 << 5, // cursor theme / size
     };
     void scheduleApply(int changes);
 
@@ -235,6 +236,7 @@ private:
     Workspace *createWorkspace(Output *o, const std::string &name,
                                size_t index);
     void applyWorkspaces();
+    void applyCursor();
     Toplevel *nextToplevel(wlr_direction dir);
 
 private:

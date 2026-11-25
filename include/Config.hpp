@@ -25,6 +25,12 @@ struct Config
     std::vector<std::string> workspaces
         = {"1", "2", "3", "4", "5", "6", "7", "8", "9"};
 
+    struct Cursor
+    {
+        int size          = 24;
+        std::string theme = "default";
+    } cursor;
+
     struct Gaps
     {
         int value  = 10;

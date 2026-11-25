@@ -305,7 +305,8 @@ MuWM::init()
 
     m_cursor = wlr_cursor_create();
     wlr_cursor_attach_output_layout(m_cursor, m_layout);
-    m_xcursor = wlr_xcursor_manager_create(nullptr, 24);
+    m_xcursor = wlr_xcursor_manager_create(m_config.cursor.theme.c_str(),
+                                           m_config.cursor.size);
 
     m_cursorMotion.bind<&MuWM::onCursorMotion>(&m_cursor->events.motion, this);
     m_cursorMotionAbs.bind<&MuWM::onCursorMotionAbs>(
@@ -637,12 +638,10 @@ MuWM::run(const std::string &startupCmd)
     if (!socket)
         return false;
 
+    // setenvs
     setenv("WAYLAND_DISPLAY", socket, 1);
-    wlr_log(WLR_INFO, "Running on WAYLAND_DISPLAY=%s", socket);
-
-    // Portals, Quickshell and D-Bus activated services look at these to learn
-    // which desktop they are in. Set before the config runs, so spawned
-    // programs inherit them.
+    setenv("XCURSOR_THEME", m_config.cursor.theme.c_str(), 1);
+    setenv("XCURSOR_SIZE", std::to_string(m_config.cursor.size).c_str(), 1);
     setenv("XDG_SESSION_TYPE", "wayland", 1);
     setenv("XDG_CURRENT_DESKTOP", "muwm", 1);
     setenv("XDG_SESSION_DESKTOP", "muwm", 1);
@@ -1772,6 +1771,9 @@ MuWM::applyPending()
 
     if (changes & ChangeWorkspace)
         applyWorkspaces();
+
+    if (changes & ChangeCursor)
+        applyCursor();
 }
 
 void
@@ -3116,6 +3118,22 @@ MuWM::createWorkspace(Output *o, const std::string &name, size_t index)
 
     o->workspaces.push_back(w);
     return w;
+}
+
+void
+MuWM::applyCursor()
+{
+    if (m_cursorIsDefault)
+        return;
+
+    if (m_xcursor)
+        wlr_xcursor_manager_destroy(m_xcursor);
+    m_xcursor = wlr_xcursor_manager_create(m_config.cursor.theme.c_str(),
+                                           m_config.cursor.size);
+    wlr_xcursor_manager_load(m_xcursor, m_config.scale);
+    setenv("XCURSOR_THEME", m_config.cursor.theme.c_str(), 1);
+    setenv("XCURSOR_SIZE", std::to_string(m_config.cursor.size).c_str(), 1);
+    wlr_cursor_set_xcursor(m_cursor, m_xcursor, "default");
 }
 
 void

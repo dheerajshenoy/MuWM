@@ -937,10 +937,21 @@ MuWM::initLuaBindings()
     // The proxies keep raw pointers to these, so they must outlive this
     // function (locals would dangle as soon as it returned).
     static Group rootGroup, optsGroup, borderGroup, keyboardGroup,
-        touchpadGroup, gapsGroup, layoutGroup;
+        touchpadGroup, gapsGroup, layoutGroup, cursorGroup;
 
     auto &kb = m_config.keyboard;
     auto &bd = m_config.border;
+
+    // lua ---@class mu.opts.cursor
+    cursorGroup.fields = {
+
+        // lua ---@field size? integer Cursor size in pixels. Must be between 1
+        // and 1000.
+        intField("size", &m_config.cursor.size, 1, 1000, MuWM::ChangeCursor),
+
+        // lua ---@field theme? string Cursor theme name.
+        stringField("theme", &m_config.cursor.theme, MuWM::ChangeCursor),
+    };
 
     // lua ---@class mu.opts.border
     borderGroup.fields = {
@@ -1028,6 +1039,9 @@ MuWM::initLuaBindings()
 
         // lua ---@field border mu.opts.border Window border options.
         subField("border", &borderGroup),
+
+        // lua ---@field cursor mu.opts.cursor Cursor options.
+        subField("cursor", &cursorGroup),
 
         // lua ---@field layout mu.opts.layout Layout options.
         subField("layout", &layoutGroup),
