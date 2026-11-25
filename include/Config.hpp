@@ -22,6 +22,7 @@ struct Config
     bool mouse_follows_focus = false;
     bool raise_on_focus      = false;
     bool apply_tearing       = false;
+    bool dynamic_workspaces = true;
 
     std::vector<std::string> workspaces
         = {"1", "2", "3", "4", "5", "6", "7", "8", "9"};

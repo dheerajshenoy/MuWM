@@ -474,11 +474,15 @@ MuWM::handleNewOutput(wlr_output *output)
     wlr_ext_workspace_group_handle_v1_output_enter(o->group, output);
 
     const auto &names = m_config.workspaces;
-    for (size_t i = 0; i < names.size(); i++)
-        createWorkspace(o, names[i], i);
+    if (m_config.dynamic_workspaces)
+        workspaceAt(o, 0);
+    else
+        for (size_t i = 0; i < names.size(); i++)
+            workspaceAt(o, i);
 
     // Only the first workspace is visible.
     o->workspace = o->workspaces[0];
+    updateWorkspaceHidden(o->workspace);
     wlr_scene_node_set_enabled(&o->workspace->sceneTree->node, true);
 
     wlr_ext_workspace_handle_v1_set_active(o->workspace->handle, true);
@@ -1043,6 +1047,7 @@ MuWM::addToplevel(Toplevel *t)
 
     auto &toplevels = t->workspace->toplevels;
     insertNewTopLevel(toplevels, t);
+    updateWorkspaceHidden(t->workspace);
 
     // A new window leaves any fullscreen window behind it, so lay out first.
     for (Toplevel *other : std::vector<Toplevel *>(toplevels))
@@ -1121,6 +1126,8 @@ MuWM::removeToplevel(Toplevel *t)
     std::erase(ws->focusHistory, t);
 
     t->workspace = nullptr;
+    updateWorkspaceHidden(ws);
+
     if (ws->focusedToplevel == t)
         ws->focusedToplevel = nullptr;
     arrange(ws);
@@ -2063,11 +2070,11 @@ MuWM::focusWorkspace(int n)
     if (!m_focusedOutput)
         return;
 
-    auto &workspaces = m_focusedOutput->workspaces;
-    if (n < 1 || n > static_cast<int>(workspaces.size()))
+    if (n < 1 || n > static_cast<int>(m_config.workspaces.size()))
         return;
 
-    switchWorkspace(m_focusedOutput, workspaces[n - 1]);
+    if (Workspace *ws = workspaceAt(m_focusedOutput, n - 1))
+        switchWorkspace(m_focusedOutput, ws);
 }
 
 void
@@ -2139,6 +2146,9 @@ MuWM::switchWorkspace(Output *out, Workspace *ws_target)
     wlr_ext_workspace_handle_v1_set_active(ws_old->handle, false);
     wlr_ext_workspace_handle_v1_set_active(ws_target->handle, true);
 
+    updateWorkspaceHidden(ws_old);
+    updateWorkspaceHidden(ws_target);
+
     clearUrgent(ws_target);
 
     m_focusedOutput = out;
@@ -2195,6 +2205,9 @@ MuWM::toplevelToWorkspace(Toplevel *toplevel, Workspace *ws_target)
     if (ws_old)
         arrange(ws_old);
     arrange(ws_target);
+
+    updateWorkspaceHidden(ws_old);
+    updateWorkspaceHidden(ws_target);
 
     if (targetVisible)
     {
@@ -3127,6 +3140,7 @@ MuWM::createWorkspace(Output *o, const std::string &name, size_t index)
     w->name      = name;
     w->output    = o;
     w->sceneTree = wlr_scene_tree_create(m_windowTree);
+    w->slot      = index;
     wlr_scene_node_set_enabled(&w->sceneTree->node,
                                false); // the caller shows one
 
@@ -3143,6 +3157,7 @@ MuWM::createWorkspace(Output *o, const std::string &name, size_t index)
     wlr_ext_workspace_handle_v1_set_coordinates(w->handle, &coord, 1);
 
     o->workspaces.push_back(w);
+    updateWorkspaceHidden(w);
     return w;
 }
 
@@ -3169,13 +3184,13 @@ MuWM::applyWorkspaces()
 
     for (Output *o : m_outputs)
     {
-        // Shrinking: first make sure we are not sitting on a workspace that
-        // is about to disappear, then move its windows to the last kept one.
-        while (o->workspaces.size() > names.size())
+        for (size_t i = o->workspaces.size(); i-- > 0;)
         {
-            Workspace *gone = o->workspaces.back();
-            Workspace *keep = o->workspaces[names.size() - 1];
+            Workspace *gone = o->workspaces[i];
+            if (gone->slot < names.size())
+                continue;
 
+            Workspace *keep = workspaceAt(o, names.size() - 1);
             if (o->workspace == gone)
                 switchWorkspace(o, keep);
             for (Toplevel *t : std::vector<Toplevel *>(gone->toplevels))
@@ -3183,22 +3198,22 @@ MuWM::applyWorkspaces()
 
             wlr_ext_workspace_handle_v1_destroy(gone->handle);
             wlr_scene_node_destroy(&gone->sceneTree->node);
-            o->workspaces.pop_back();
+            o->workspaces.erase(o->workspaces.begin() + i);
             delete gone;
         }
 
-        // Renaming what stays, growing what is missing.
-        for (size_t i = 0; i < names.size(); i++)
+        for (Workspace *ws : o->workspaces)
         {
-            if (i < o->workspaces.size())
-            {
-                o->workspaces[i]->name = names[i];
-                wlr_ext_workspace_handle_v1_set_name(o->workspaces[i]->handle,
-                                                     names[i].c_str());
-            }
-            else
-                createWorkspace(o, names[i], i);
+            ws->name = names[ws->slot];
+            wlr_ext_workspace_handle_v1_set_name(ws->handle, ws->name.c_str());
         }
+
+        if (!m_config.dynamic_workspaces)
+            for (size_t i = 0; i < names.size(); i++)
+                workspaceAt(o, i); // creates any that are missing
+
+        for (Workspace *ws : o->workspaces)
+            updateWorkspaceHidden(ws);
     }
     arrange();
 }
@@ -3352,4 +3367,31 @@ MuWM::clearUrgent(Workspace *ws)
         return;
     ws->urgent = false;
     wlr_ext_workspace_handle_v1_set_urgent(ws->handle, false);
+}
+
+Workspace *
+MuWM::workspaceAt(Output *o, size_t slot)
+{
+    const auto &names = m_config.workspaces;
+    if (slot >= names.size())
+        return nullptr;
+
+    for (Workspace *ws : o->workspaces)
+        if (ws->slot == slot)
+            return ws;
+
+    Workspace *ws = createWorkspace(o, names[slot], slot);
+    std::ranges::sort(o->workspaces, {}, &Workspace::slot);
+    return ws;
+}
+
+void
+MuWM::updateWorkspaceHidden(Workspace *ws)
+{
+    if (!ws || !ws->handle)
+        return;
+    const bool active = ws->output && ws->output->workspace == ws;
+    const bool hide
+        = m_config.dynamic_workspaces && ws->toplevels.empty() && !active;
+    wlr_ext_workspace_handle_v1_set_hidden(ws->handle, hide);
 }

@@ -1056,6 +1056,11 @@ MuWM::initLuaBindings()
         stringListField("workspaces", &m_config.workspaces,
                         MuWM::ChangeWorkspace),
 
+        // lua ---@field dynamic_workspaces boolean Whether to create and destroy
+        // workspaces on demand, instead of using the fixed list in mu.opts.workspaces.
+        boolField("dynamic_workspaces", &m_config.dynamic_workspaces,
+                  MuWM::ChangeWorkspace),
+
         // lua ---@field focus_follows_mouse boolean Whether to focus a window
         // when the mouse enters it.
         boolField("focus_follows_mouse", &m_config.focus_follows_mouse),

@@ -240,6 +240,9 @@ private:
     void applyCursor();
     Toplevel *nextToplevel(wlr_direction dir);
     void clearUrgent(Workspace *ws);
+    Workspace *workspaceAt(Output *o,
+                           size_t slot); // for on demand created workspaces
+    void updateWorkspaceHidden(Workspace *ws);
 
 private:
     bool m_ok = false;

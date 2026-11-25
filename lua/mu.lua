@@ -58,9 +58,11 @@
 ---@field touchpad mu.opts.touchpad Touchpad options.
 ---@field gaps mu.opts.gaps Window gap options.
 ---@field border mu.opts.border Window border options.
+---@field cursor mu.opts.cursor Cursor options.
 ---@field layout mu.opts.layout Layout options.
 ---@field new_client_position mu.NewClientPosition Where a new window is inserted in the layout.
 ---@field workspaces string[] Workspace names; their number is the workspace count.
+---@field dynamic_workspaces boolean Whether to create and destroy workspaces on demand, instead of using the fixed list in mu.opts.workspaces.
 ---@field focus_follows_mouse boolean Whether to focus a window when the mouse enters it.
 ---@field raise_on_focus boolean Whether to raise a window when it is focused.
 ---@field apply_tearing boolean Whether to apply tearing to windows that request it.

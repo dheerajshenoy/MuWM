@@ -16,5 +16,6 @@ struct Workspace
     std::vector<Toplevel *> toplevels;
     std::string name;
     bool urgent = false;
+    size_t slot;
     float masterRatio = -1.0f; // < 0: use the configured default
 };
