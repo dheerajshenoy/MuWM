@@ -290,6 +290,13 @@ MuWM::init()
         = wlr_ext_foreign_toplevel_image_capture_source_manager_v1_create(
             m_display, 1);
 
+    wlr_single_pixel_buffer_manager_v1_create(m_display);
+
+    auto *foreign_registry = wlr_xdg_foreign_registry_create(m_display);
+
+    wlr_xdg_foreign_v1_create(m_display, foreign_registry);
+    wlr_xdg_foreign_v2_create(m_display, foreign_registry);
+
     m_captureRequest.bind<&MuWM::onToplevelCaptureRequest>(
         &m_toplevelCaptureManager->events.new_request, this);
 
