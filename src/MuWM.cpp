@@ -979,6 +979,7 @@ MuWM::focusToplevel(Toplevel *t, bool raise)
         m_focusedOutput = ws->output;
     ws->focusedToplevel = t;
 
+    clearUrgent(ws);
     // Erase first so the window can't appear twice, then make it the most
     // recent entry (the back).
     std::erase(ws->focusHistory, t);
@@ -2138,6 +2139,8 @@ MuWM::switchWorkspace(Output *out, Workspace *ws_target)
     wlr_ext_workspace_handle_v1_set_active(ws_old->handle, false);
     wlr_ext_workspace_handle_v1_set_active(ws_target->handle, true);
 
+    clearUrgent(ws_target);
+
     m_focusedOutput = out;
 
     arrange(ws_target);
@@ -2864,8 +2867,11 @@ MuWM::onActivationRequest(void *data)
     if (ev->token->surface && ev->token->surface != focused)
     {
         if (target->workspace && target->workspace->handle)
+        {
+            target->workspace->urgent = true;
             wlr_ext_workspace_handle_v1_set_urgent(target->workspace->handle,
                                                    true);
+        }
         return;
     }
 
@@ -3337,4 +3343,13 @@ MuWM::onSetIcon(void *data)
     if (t->icon)
         wlr_xdg_toplevel_icon_v1_unref(t->icon);
     t->icon = ev->icon ? wlr_xdg_toplevel_icon_v1_ref(ev->icon) : nullptr;
+}
+
+void
+MuWM::clearUrgent(Workspace *ws)
+{
+    if (!ws || !ws->urgent || !ws->handle)
+        return;
+    ws->urgent = false;
+    wlr_ext_workspace_handle_v1_set_urgent(ws->handle, false);
 }

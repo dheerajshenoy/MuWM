@@ -239,6 +239,7 @@ private:
     void applyWorkspaces();
     void applyCursor();
     Toplevel *nextToplevel(wlr_direction dir);
+    void clearUrgent(Workspace *ws);
 
 private:
     bool m_ok = false;
