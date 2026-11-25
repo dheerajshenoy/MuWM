@@ -2,16 +2,11 @@
 
 Tiling Wayland compositor in C++ on wlroots (CMake).
 
+- [ ] Multi-GPU: document `WLR_DRM_DEVICES`
 - [ ] Tags
 - [ ] Window rules (match on app_id / title)
 - [ ] More layouts (monocle, grid) and a way to switch
 - [ ] Window capture of windows on hidden workspaces (their scene node is disabled, so the frame is blank)
-- [ ] Output and input hotplug (add and remove)
-- [ ] Laptop input: libinput settings (tap-to-click, natural scroll, disable-while-typing), lid switch turns the internal panel off
-- [ ] Test output hotplug: unplug a monitor with windows on it, unplug the last output
-- [ ] Cursor theme: pass the theme to the xcursor manager and set `XCURSOR_THEME` / `XCURSOR_SIZE` for clients
-- [ ] Multi-GPU: document `WLR_DRM_DEVICES`
-- [ ] Small protocols: single-pixel-buffer, xdg-foreign
 - [ ] Clean exit on SIGTERM; reap child processes
 - [ ] Run under ASan / UBSan, check listeners for leaks
 - [ ] Check that the name `muwm` is free on GitHub and the AUR
