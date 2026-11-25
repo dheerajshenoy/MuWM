@@ -810,6 +810,11 @@ MuWM::applyPointerConfig(Pointer *pointer)
         return;
     libinput_device *dev = wlr_libinput_get_device_handle(pointer->device);
 
+    const uint32_t methods = libinput_device_config_scroll_get_methods(dev);
+    if (methods & LIBINPUT_CONFIG_SCROLL_2FG)
+        libinput_device_config_scroll_set_method(dev,
+                                                 LIBINPUT_CONFIG_SCROLL_2FG);
+
     // These are touchpad options; only touchpads support tapping, so this
     // leaves mice alone.
     if (libinput_device_config_tap_get_finger_count(dev) == 0)
