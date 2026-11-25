@@ -63,6 +63,7 @@
 ---@field workspaces string[] Workspace names; their number is the workspace count.
 ---@field focus_follows_mouse boolean Whether to focus a window when the mouse enters it.
 ---@field raise_on_focus boolean Whether to raise a window when it is focused.
+---@field apply_tearing boolean Whether to apply tearing to windows that request it.
 
 ---@class mu.opts.touchpad
 ---@field natural_scroll? boolean Whether to enable natural scrolling on the touchpad.

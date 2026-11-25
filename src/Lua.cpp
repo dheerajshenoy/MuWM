@@ -1063,6 +1063,10 @@ MuWM::initLuaBindings()
         // lua ---@field raise_on_focus boolean Whether to raise a window when it
         // is focused.
         boolField("raise_on_focus", &m_config.raise_on_focus),
+
+        // lua ---@field apply_tearing boolean Whether to apply tearing to
+        // windows that request it.
+        boolField("apply_tearing", &m_config.apply_tearing),
     };
     // clang-format on
 
