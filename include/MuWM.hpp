@@ -10,6 +10,7 @@
 #include "lua.hpp"
 #include "wlroots.hpp"
 
+#include <optional>
 #include <vector>
 
 class MuWM;
@@ -77,10 +78,16 @@ public:
     void close(Toplevel *t);
     void focusWorkspace(int index);
     void focusWorkspace(const std::string &name);
-    void windowToWorkspace(int index);
-    void windowToWorkspace(const std::string &name);
-    void windowToWorkspace(Toplevel *t, int index);
-    void windowToWorkspace(Toplevel *t, const std::string &name);
+    // `focus`: follow the window (switch to its new workspace and focus it).
+    // nullopt uses the focus_moved_window config option.
+    using MoveFocus = std::optional<bool>;
+    void windowToWorkspace(int index, MoveFocus focus = std::nullopt);
+    void windowToWorkspace(const std::string &name,
+                           MoveFocus focus = std::nullopt);
+    void windowToWorkspace(Toplevel *t, int index,
+                           MoveFocus focus = std::nullopt);
+    void windowToWorkspace(Toplevel *t, const std::string &name,
+                           MoveFocus focus = std::nullopt);
     void toggleFullscreen();
     void toggleFullscreen(Toplevel *t);
     void toggleFloating();

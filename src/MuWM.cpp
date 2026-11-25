@@ -2099,19 +2099,19 @@ MuWM::focusWorkspace(const std::string &name)
 }
 
 void
-MuWM::windowToWorkspace(int index)
+MuWM::windowToWorkspace(int index, MoveFocus focus)
 {
-    windowToWorkspace(focusedToplevel(), index);
+    windowToWorkspace(focusedToplevel(), index, focus);
 }
 
 void
-MuWM::windowToWorkspace(const std::string &name)
+MuWM::windowToWorkspace(const std::string &name, MoveFocus focus)
 {
-    windowToWorkspace(focusedToplevel(), name);
+    windowToWorkspace(focusedToplevel(), name, focus);
 }
 
 void
-MuWM::windowToWorkspace(Toplevel *t, int index)
+MuWM::windowToWorkspace(Toplevel *t, int index, MoveFocus focus)
 {
     if (!t || !t->workspace || !t->workspace->output)
         return;
@@ -2128,17 +2128,22 @@ MuWM::windowToWorkspace(Toplevel *t, int index)
         return;
 
     toplevelToWorkspace(t, ws_target);
+
+    // Follow the window: show its workspace and focus it. Without this a
+    // window moved to a hidden workspace stays out of sight and out of focus.
+    if (focus.value_or(m_config.focus_moved_window))
+        activateToplevel(t);
 }
 
 void
-MuWM::windowToWorkspace(Toplevel *t, const std::string &name)
+MuWM::windowToWorkspace(Toplevel *t, const std::string &name, MoveFocus focus)
 {
     const auto &names = m_config.workspaces;
     const auto it     = std::ranges::find(names, name);
     if (it == names.end())
         return;
 
-    windowToWorkspace(t, static_cast<int>(it - names.begin()) + 1);
+    windowToWorkspace(t, static_cast<int>(it - names.begin()) + 1, focus);
 }
 
 void

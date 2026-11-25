@@ -23,6 +23,7 @@ struct Config
     bool raise_on_focus      = false;
     bool apply_tearing       = false;
     bool dynamic_workspaces = true;
+    bool focus_moved_window = false; // follow a window moved to a workspace
 
     std::vector<std::string> workspaces
         = {"1", "2", "3", "4", "5", "6", "7", "8", "9"};

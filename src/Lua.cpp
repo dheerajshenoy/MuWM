@@ -359,15 +359,27 @@ luaWindowCall(lua_State *L)
     return 0;
 }
 
+// An optional boolean argument: nullopt when absent or nil, so the config
+// option decides.
+MuWM::MoveFocus
+optBool(lua_State *L, int idx)
+{
+    if (lua_isnoneornil(L, idx))
+        return std::nullopt;
+    luaL_checktype(L, idx, LUA_TBOOLEAN);
+    return lua_toboolean(L, idx) != 0;
+}
+
 int
 luaWindowMoveToWorkspace(lua_State *L)
 {
-    Toplevel *t = checkWindow(L);
-    MuWM *wm    = wmFrom(L);
+    Toplevel *t           = checkWindow(L);
+    MuWM *wm              = wmFrom(L);
+    const MuWM::MoveFocus focus = optBool(L, 3);
     if (lua_type(L, 2) == LUA_TNUMBER)
-        wm->windowToWorkspace(t, static_cast<int>(lua_tointeger(L, 2)));
+        wm->windowToWorkspace(t, static_cast<int>(lua_tointeger(L, 2)), focus);
     else if (lua_type(L, 2) == LUA_TSTRING)
-        wm->windowToWorkspace(t, std::string(lua_tostring(L, 2)));
+        wm->windowToWorkspace(t, std::string(lua_tostring(L, 2)), focus);
     else
         return luaL_error(
             L, "window:move_to_workspace expects an integer or string");
@@ -702,19 +714,21 @@ luaSetMasterRatio(lua_State *L)
 /*lua
   ---Move the focused window to a workspace by index or name
   ---@param index integer|string The workspace index (1-based) or name
-  function mu.window_to_workspace(index) end
+  ---@param focus? boolean Follow the window: switch to its workspace and focus it. Defaults to mu.opts.focus_moved_window.
+  function mu.window_to_workspace(index, focus) end
 */
 // clang-format on
 int
 luaWindowToWorkspace(lua_State *L)
 {
+    const MuWM::MoveFocus focus = optBool(L, 2);
     if (lua_type(L, 1) == LUA_TNUMBER)
     {
         const int index = static_cast<int>(luaL_checkinteger(L, 1));
-        wmFrom(L)->windowToWorkspace(index);
+        wmFrom(L)->windowToWorkspace(index, focus);
     }
     else if (lua_type(L, 1) == LUA_TSTRING)
-        wmFrom(L)->windowToWorkspace(lua_tostring(L, 1));
+        wmFrom(L)->windowToWorkspace(std::string(lua_tostring(L, 1)), focus);
     else
         return luaL_error(
             L, "mu.window_to_workspace expects an integer or string");
@@ -774,7 +788,7 @@ struct LuaRef
   ---@field focus fun(self: mu.Window) Focus the window, switching to its workspace first.
   ---@field toggle_fullscreen fun(self: mu.Window)
   ---@field toggle_floating fun(self: mu.Window)
-  ---@field move_to_workspace fun(self: mu.Window, workspace: integer|string)
+  ---@field move_to_workspace fun(self: mu.Window, workspace: integer|string, focus?: boolean)
 */
 // clang-format on
 struct EventName
@@ -1004,7 +1018,10 @@ MuWM::initLuaBindings()
         {"focus", luaWindowCall<&MuWM::activateToplevel>},
 
         // lua ---@field move_to_workspace fun(self: mu.Window, workspace:
-        // integer|string) Move the window to a workspace by index or name.
+        // integer|string, focus?: boolean) Move the window to a workspace by
+        // index or name. With focus, switch to that workspace and focus the
+        // window; without it the window stays where it is on screen. Defaults
+        // to mu.opts.focus_moved_window.
         {"move_to_workspace", luaWindowMoveToWorkspace},
     };
 
@@ -1139,6 +1156,11 @@ MuWM::initLuaBindings()
         // workspaces on demand, instead of using the fixed list in mu.opts.workspaces.
         boolField("dynamic_workspaces", &m_config.dynamic_workspaces,
                   MuWM::ChangeWorkspace),
+
+        // lua ---@field focus_moved_window boolean Whether moving a window to
+        // another workspace also switches to that workspace and focuses the
+        // window. Calls can override it per move.
+        boolField("focus_moved_window", &m_config.focus_moved_window),
 
         // lua ---@field focus_follows_mouse boolean Whether to focus a window
         // when the mouse enters it.

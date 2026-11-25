@@ -29,7 +29,7 @@
 ---@field focus fun(self: mu.Window) Focus the window, switching to its workspace first.
 ---@field toggle_fullscreen fun(self: mu.Window)
 ---@field toggle_floating fun(self: mu.Window)
----@field move_to_workspace fun(self: mu.Window, workspace: integer|string)
+---@field move_to_workspace fun(self: mu.Window, workspace: integer|string, focus?: boolean)
 
 ---@class mu.opts.cursor
 ---@field size? integer Cursor size in pixels. Must be between 1 and 1000.
@@ -68,6 +68,7 @@
 ---@field new_client_position mu.NewClientPosition Where a new window is inserted in the layout.
 ---@field workspaces string[] Workspace names; their number is the workspace count.
 ---@field dynamic_workspaces boolean Whether to create and destroy workspaces on demand, instead of using the fixed list in mu.opts.workspaces.
+---@field focus_moved_window boolean Whether moving a window to another workspace also switches to that workspace and focuses the window. Calls can override it per move.
 ---@field focus_follows_mouse boolean Whether to focus a window when the mouse enters it.
 ---@field raise_on_focus boolean Whether to raise a window when it is focused.
 ---@field apply_tearing boolean Whether to apply tearing to windows that request it.
@@ -126,7 +127,8 @@ function mu.set_master_ratio(ratio) end
 
 ---Move the focused window to a workspace by index or name
 ---@param index integer|string The workspace index (1-based) or name
-function mu.window_to_workspace(index) end
+---@param focus? boolean Follow the window: switch to its workspace and focus it. Defaults to mu.opts.focus_moved_window.
+function mu.window_to_workspace(index, focus) end
 
 ---Register an event handler
 ---@param event mu.Event The event name
