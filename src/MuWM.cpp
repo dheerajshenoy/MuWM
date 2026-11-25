@@ -1993,7 +1993,13 @@ MuWM::swapPrev()
 void
 MuWM::close()
 {
-    if (Toplevel *t = focusedToplevel())
+    close(focusedToplevel());
+}
+
+void
+MuWM::close(Toplevel *t)
+{
+    if (t)
         t->close();
 }
 
@@ -2095,33 +2101,44 @@ MuWM::focusWorkspace(const std::string &name)
 void
 MuWM::windowToWorkspace(int index)
 {
-    if (!m_focusedOutput)
-        return;
-
-    auto &workspaces = m_focusedOutput->workspaces;
-    if (index < 1 || index > static_cast<int>(workspaces.size()))
-        return;
-
-    Workspace *ws_target = workspaces[index - 1];
-    if (Toplevel *t = focusedToplevel())
-        toplevelToWorkspace(t, ws_target);
+    windowToWorkspace(focusedToplevel(), index);
 }
 
 void
 MuWM::windowToWorkspace(const std::string &name)
 {
-    if (!m_focusedOutput)
+    windowToWorkspace(focusedToplevel(), name);
+}
+
+void
+MuWM::windowToWorkspace(Toplevel *t, int index)
+{
+    if (!t || !t->workspace || !t->workspace->output)
         return;
 
-    auto &workspaces = m_focusedOutput->workspaces;
-    auto it = std::find_if(workspaces.begin(), workspaces.end(),
-                           [&](Workspace *ws) { return ws->name == name; });
-    if (it == workspaces.end())
+    // The slot comes from the configured list, not from the output's vector,
+    // which only holds the workspaces that exist right now.
+    if (index < 1 || index > static_cast<int>(m_config.workspaces.size()))
         return;
 
-    Workspace *ws_target = *it;
-    if (Toplevel *t = focusedToplevel())
-        toplevelToWorkspace(t, ws_target);
+    // workspaceAt creates the workspace if it doesn't exist yet.
+    Workspace *ws_target
+        = workspaceAt(t->workspace->output, static_cast<size_t>(index - 1));
+    if (!ws_target)
+        return;
+
+    toplevelToWorkspace(t, ws_target);
+}
+
+void
+MuWM::windowToWorkspace(Toplevel *t, const std::string &name)
+{
+    const auto &names = m_config.workspaces;
+    const auto it     = std::ranges::find(names, name);
+    if (it == names.end())
+        return;
+
+    windowToWorkspace(t, static_cast<int>(it - names.begin()) + 1);
 }
 
 void
@@ -2242,7 +2259,13 @@ MuWM::toplevelToWorkspace(Toplevel *toplevel, Workspace *ws_target)
 void
 MuWM::toggleFullscreen()
 {
-    if (Toplevel *t = focusedToplevel())
+    toggleFullscreen(focusedToplevel());
+}
+
+void
+MuWM::toggleFullscreen(Toplevel *t)
+{
+    if (t)
         setFullscreen(t, !t->fullscreen);
 }
 
@@ -2282,12 +2305,18 @@ MuWM::setMasterRatio(Workspace *ws, float ratio)
 void
 MuWM::toggleFloating()
 {
-    if (Toplevel *t = focusedToplevel())
-    {
-        setFloating(t, !t->floating);
-        arrange(t->workspace);
-        wlr_scene_node_raise_to_top(&t->tree->node);
-    }
+    toggleFloating(focusedToplevel());
+}
+
+void
+MuWM::toggleFloating(Toplevel *t)
+{
+    if (!t || !t->workspace)
+        return;
+
+    setFloating(t, !t->floating);
+    arrange(t->workspace);
+    wlr_scene_node_raise_to_top(&t->tree->node);
 }
 
 void
@@ -3394,4 +3423,20 @@ MuWM::updateWorkspaceHidden(Workspace *ws)
     const bool hide
         = m_config.dynamic_workspaces && ws->toplevels.empty() && !active;
     wlr_ext_workspace_handle_v1_set_hidden(ws->handle, hide);
+}
+
+Toplevel *
+MuWM::toplevelById(uint64_t id)
+{
+    for (Output *o : m_outputs)
+        for (Workspace *ws : o->workspaces)
+            for (Toplevel *t : ws->toplevels)
+                if (t->id == id)
+                    return t;
+
+    for (Toplevel *t : m_unassigned.toplevels)
+        if (t->id == id)
+            return t;
+
+    return nullptr;
 }

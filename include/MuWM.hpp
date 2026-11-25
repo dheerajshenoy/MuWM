@@ -74,12 +74,17 @@ public:
     void workspaceNext();
     void workspacePrev();
     void close();
+    void close(Toplevel *t);
     void focusWorkspace(int index);
     void focusWorkspace(const std::string &name);
     void windowToWorkspace(int index);
     void windowToWorkspace(const std::string &name);
+    void windowToWorkspace(Toplevel *t, int index);
+    void windowToWorkspace(Toplevel *t, const std::string &name);
     void toggleFullscreen();
+    void toggleFullscreen(Toplevel *t);
     void toggleFloating();
+    void toggleFloating(Toplevel *t);
     void setFloating(Toplevel *, bool floating);
     void setFullscreen(Toplevel *, bool fullscreen);
     void setMasterRatio(Workspace *ws, float ratio);
@@ -165,6 +170,7 @@ public:
     {
         return m_securityContext;
     }
+    Toplevel *toplevelById(uint64_t id);
 
 private:
     bool init();

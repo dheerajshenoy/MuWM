@@ -25,6 +25,11 @@
 ---@field workspace string Name of the workspace the window is on.
 ---@field output string Name of the output the window is on.
 ---@field focused boolean Whether the window had focus.
+---@field close fun(self: mu.Window) Ask the window to close; does nothing if it is gone.
+---@field focus fun(self: mu.Window) Focus the window, switching to its workspace first.
+---@field toggle_fullscreen fun(self: mu.Window)
+---@field toggle_floating fun(self: mu.Window)
+---@field move_to_workspace fun(self: mu.Window, workspace: integer|string)
 
 ---@class mu.opts.cursor
 ---@field size? integer Cursor size in pixels. Must be between 1 and 1000.

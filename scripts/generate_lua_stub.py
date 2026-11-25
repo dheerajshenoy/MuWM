@@ -177,14 +177,26 @@ def parse(text):
                         f"code-only {sorted(code_events - docs_events)}")
 
     wm = re.search(r"---@class mu\.Window\n(.*?)(?:\n\s*\n|\Z)", body_all, re.S)
-    doc_win = set(re.findall(r"---@field\s+(\w+)", wm.group(1))) if wm else set()
+    # Fields typed `fun(...)` are methods on the "mu.window" metatable
+    # (kWindowMethods); the rest are data set by pushWindow.
+    win_fields = re.findall(r"---@field\s+(\w+)\s+(\S+)", wm.group(1)) if wm else []
+    doc_win = {n for n, t in win_fields if not t.startswith("fun(")}
+    doc_methods = {n for n, t in win_fields if t.startswith("fun(")}
+
     pm = re.search(r"^pushWindow\(.*?^\}", text, re.S | re.M)
     code_win = set(re.findall(r'lua_setfield\(L, -2, "(\w+)"\)', pm.group(0))) \
         if pm else set()
+    km = re.search(r"kWindowMethods\[\]\s*=\s*\{(.*?)\};", text, re.S)
+    code_methods = set(re.findall(r'\{\s*"(\w+)"', km.group(1))) if km else set()
+
     if doc_win != code_win:
         problems.add(1, "mu.Window fields differ from pushWindow: "
                         f"docs-only {sorted(doc_win - code_win)}, "
                         f"code-only {sorted(code_win - doc_win)}")
+    if doc_methods != code_methods:
+        problems.add(1, "mu.Window methods differ from kWindowMethods: "
+                        f"docs-only {sorted(doc_methods - code_methods)}, "
+                        f"code-only {sorted(code_methods - doc_methods)}")
 
     return blocks, groups, problems
 

@@ -339,6 +339,41 @@ setField(lua_State *L, const Group *g, const char *key, int val)
         wmFrom(L)->scheduleApply(f->changes);
 }
 
+// The window a method was called on. nullptr when it is gone, in which case
+// the method must do nothing (never fall back to the focused window).
+Toplevel *
+checkWindow(lua_State *L)
+{
+    luaL_checktype(L, 1, LUA_TTABLE);
+    lua_getfield(L, 1, "id");
+    const auto id = static_cast<uint64_t>(luaL_checkinteger(L, -1));
+    lua_pop(L, 1);
+    return wmFrom(L)->toplevelById(id);
+}
+
+template <void (MuWM::*Method)(Toplevel *)>
+int
+luaWindowCall(lua_State *L)
+{
+    (wmFrom(L)->*Method)(checkWindow(L));
+    return 0;
+}
+
+int
+luaWindowMoveToWorkspace(lua_State *L)
+{
+    Toplevel *t = checkWindow(L);
+    MuWM *wm    = wmFrom(L);
+    if (lua_type(L, 2) == LUA_TNUMBER)
+        wm->windowToWorkspace(t, static_cast<int>(lua_tointeger(L, 2)));
+    else if (lua_type(L, 2) == LUA_TSTRING)
+        wm->windowToWorkspace(t, std::string(lua_tostring(L, 2)));
+    else
+        return luaL_error(
+            L, "window:move_to_workspace expects an integer or string");
+    return 0;
+}
+
 void
 pushWindow(lua_State *L, const WindowInfo &w)
 {
@@ -359,6 +394,7 @@ pushWindow(lua_State *L, const WindowInfo &w)
     lua_setfield(L, -2, "output");
     lua_pushboolean(L, w.focused);
     lua_setfield(L, -2, "focused");
+    luaL_setmetatable(L, "mu.window");
 }
 
 // Pushes the handler arguments for an event; returns how many.
@@ -734,6 +770,11 @@ struct LuaRef
   ---@field workspace string Name of the workspace the window is on.
   ---@field output string Name of the output the window is on.
   ---@field focused boolean Whether the window had focus.
+  ---@field close fun(self: mu.Window) Ask the window to close; does nothing if it is gone.
+  ---@field focus fun(self: mu.Window) Focus the window, switching to its workspace first.
+  ---@field toggle_fullscreen fun(self: mu.Window)
+  ---@field toggle_floating fun(self: mu.Window)
+  ---@field move_to_workspace fun(self: mu.Window, workspace: integer|string)
 */
 // clang-format on
 struct EventName
@@ -938,6 +979,44 @@ MuWM::initLuaBindings()
     // function (locals would dangle as soon as it returned).
     static Group rootGroup, optsGroup, borderGroup, keyboardGroup,
         touchpadGroup, gapsGroup, layoutGroup, cursorGroup;
+
+    struct Method
+    {
+        const char *name;
+        lua_CFunction fn;
+    };
+
+    static const Method kWindowMethods[] = {
+        // lua ---@field close fun(self: mu.Window) Ask the window to close;
+        // does nothing if it is gone.
+        {"close", luaWindowCall<&MuWM::close>},
+
+        // lua ---@field toggle_fullscreen fun(self: mu.Window) Toggle the
+        // window's fullscreen state.
+        {"toggle_fullscreen", luaWindowCall<&MuWM::toggleFullscreen>},
+
+        // lua ---@field toggle_floating fun(self: mu.Window) Toggle the
+        // window's floating state.
+        {"toggle_floating", luaWindowCall<&MuWM::toggleFloating>},
+
+        // lua ---@field focus fun(self: mu.Window) Focus the window, switching
+        // to its workspace first.
+        {"focus", luaWindowCall<&MuWM::activateToplevel>},
+
+        // lua ---@field move_to_workspace fun(self: mu.Window, workspace:
+        // integer|string) Move the window to a workspace by index or name.
+        {"move_to_workspace", luaWindowMoveToWorkspace},
+    };
+
+    luaL_newmetatable(m_lua, "mu.window"); // stack: mt
+    lua_newtable(m_lua);                   // stack: mt, methods
+    for (const Method &m : kWindowMethods)
+    {
+        lua_pushcfunction(m_lua, m.fn);
+        lua_setfield(m_lua, -2, m.name);
+    }
+    lua_setfield(m_lua, -2, "__index"); // mt.__index = methods
+    lua_pop(m_lua, 1);
 
     auto &kb = m_config.keyboard;
     auto &bd = m_config.border;
