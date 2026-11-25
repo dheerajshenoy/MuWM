@@ -11,8 +11,10 @@ extern "C"
 #include <wlr/types/wlr_compositor.h>
 #include <wlr/types/wlr_cursor.h>
 #include <wlr/types/wlr_data_device.h>
+#include <wlr/types/wlr_fixes.h>
 #include <wlr/types/wlr_input_device.h>
 #include <wlr/types/wlr_keyboard.h>
+#include <wlr/types/wlr_keyboard_shortcuts_inhibit_v1.h>
 #define namespace namespace_
 #include <wlr/types/wlr_layer_shell_v1.h>
 #undef namespace

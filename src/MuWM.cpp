@@ -272,6 +272,7 @@ MuWM::init()
     wlr_ext_data_control_manager_v1_create(m_display, 1);
     wlr_data_control_manager_v1_create(m_display);
     wlr_viewporter_create(m_display);
+    wlr_fixes_create(m_display, 1);
     wlr_fractional_scale_manager_v1_create(m_display, 1);
     m_workspaceManager = wlr_ext_workspace_manager_v1_create(m_display, 1);
 
@@ -406,6 +407,11 @@ MuWM::init()
     m_tearing = wlr_tearing_control_manager_v1_create(m_display, 1);
 
     m_securityContext = wlr_security_context_manager_v1_create(m_display);
+
+    m_shortcutInhibitManager
+        = wlr_keyboard_shortcuts_inhibit_v1_create(m_display);
+    m_keyboardInhibit.bind<&MuWM::onKeyboardInhibit>(
+        &m_shortcutInhibitManager->events.new_inhibitor, this);
 
     wl_display_set_global_filter(
         m_display,
@@ -927,6 +933,15 @@ MuWM::handleKeybinding(uint32_t mods, xkb_keysym_t sym)
 {
     if (m_locked)
         return false; // no bindings behind the lock screen
+
+    // A focused client that asked to inhibit shortcuts gets every key.
+    wlr_surface *focus = m_seat->keyboard_state.focused_surface;
+    wlr_keyboard_shortcuts_inhibitor_v1 *inh = nullptr;
+    wl_list_for_each(inh, &m_shortcutInhibitManager->inhibitors, link)
+    {
+        if (inh->active && inh->surface == focus)
+            return false;
+    }
 
     sym = xkb_keysym_to_lower(sym);
 
@@ -3444,4 +3459,11 @@ MuWM::toplevelById(uint64_t id)
             return t;
 
     return nullptr;
+}
+
+void
+MuWM::onKeyboardInhibit(void *data)
+{
+    auto *inh = static_cast<wlr_keyboard_shortcuts_inhibitor_v1 *>(data);
+    wlr_keyboard_shortcuts_inhibitor_v1_activate(inh);
 }

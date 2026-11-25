@@ -214,6 +214,7 @@ private:
     void onWorkspaceCommit(void *data);
     void onSessionActive(void *data);
     void onNewInhibitor(void *data);
+    void onKeyboardInhibit(void *data);
     void onOutputPowerSetMode(void *data);
     void onRequestStartDrag(void *data);
     void onStartDrag(void *data);
@@ -302,6 +303,8 @@ private:
     wlr_pointer_gestures_v1 *m_pointerGestures                = nullptr;
     wlr_ext_foreign_toplevel_image_capture_source_manager_v1
         *m_toplevelCaptureManager = nullptr;
+    wlr_keyboard_shortcuts_inhibit_manager_v1 *m_shortcutInhibitManager
+        = nullptr;
 
     Output *m_focusedOutput = nullptr;
     std::vector<Output *> m_outputs;
@@ -348,6 +351,7 @@ private:
     Listener<MuWM> m_requestStartDrag;
     Listener<MuWM> m_startDrag;
     Listener<MuWM> m_dragIconDestroy;
+    Listener<MuWM> m_keyboardInhibit;
 
     // Super+drag: left button moves a window, right button resizes it.
     enum class Grab
