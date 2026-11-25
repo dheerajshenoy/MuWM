@@ -12,9 +12,18 @@ Tiling Wayland compositor in C++ on wlroots (CMake).
 - [ ] Touch and tablet input (`wlr_touch`, tablet-v2)
 - [ ] IPC / control socket (`muwm-msg`) for scripting and bars that need layout and focus info
 - [ ] Scratchpad and sticky windows
-- [ ] xdg-system-bell
 - [ ] Read this when adding window rules (xdg-toplevel-tag)
 - [ ] Animations (optional)
 - [ ] text-input-v3 + input-method-v2: IME support, e.g. fcitx.
 - [ ] Multi-GPU: document `WLR_DRM_DEVICES`
 - [ ] virtual-keyboard + virtual-pointer: wtype, ydotool-style automation.
+
+## Protocols
+
+- [ ] ext-transient-seat-v1
+- [ ] drm-lease-v1
+- [ ] tablet-unstable-v2
+- [ ] xdg-system-bell
+- [ ] wlr-virtual-pointer-unstable-v1
+- [ ] virtual-keyboard-unstable-v1
+- [ ] color-management-v1: HDR / wide-gamut; needs per-surface color conversion in the render path
