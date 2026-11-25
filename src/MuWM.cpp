@@ -169,7 +169,7 @@ MuWM::init()
         return false;
     }
 
-    for (int sig : {SIGINT, SIGTERM})
+    for (int sig : {SIGINT, SIGTERM, SIGHUP})
         wl_event_loop_add_signal(wl_display_get_event_loop(m_display), sig,
                                  [](int, void *d)
         {
@@ -1479,6 +1479,9 @@ MuWM::spawn(const std::string &cmd)
         setsid();
         if (fork() == 0)
         {
+            sigset_t set;
+            sigemptyset(&set);
+            sigprocmask(SIG_SETMASK, &set, nullptr);
             execl("/bin/sh", "sh", "-c", cmd.c_str(), nullptr);
             _exit(1);
         }
