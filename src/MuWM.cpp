@@ -922,7 +922,18 @@ MuWM::removePointer(Pointer *pointer)
 void
 MuWM::installDefaultBindings()
 {
-    constexpr uint32_t mods = WLR_MODIFIER_LOGO | WLR_MODIFIER_SHIFT;
+    constexpr uint32_t mods  = WLR_MODIFIER_LOGO | WLR_MODIFIER_SHIFT;
+    constexpr uint32_t super = WLR_MODIFIER_LOGO;
+
+    auto bind = [this](uint32_t modifiers, xkb_keysym_t sym,
+                       std::function<void()> action)
+    {
+        Binding b;
+        b.mods   = modifiers;
+        b.sym    = sym;
+        b.native = std::move(action);
+        addBinding(std::move(b));
+    };
 
     Binding quitKey;
     quitKey.mods   = mods;
@@ -945,6 +956,19 @@ MuWM::installDefaultBindings()
               "command -v \"$t\" >/dev/null 2>&1 && exec \"$t\"; done");
     };
     addBinding(std::move(terminalKey));
+
+    bind(super, XKB_KEY_j, [this] { focusNext(); });
+    bind(super, XKB_KEY_k, [this] { focusPrev(); });
+    bind(mods, XKB_KEY_j, [this] { swapNext(); });
+    bind(mods, XKB_KEY_k, [this] { swapPrev(); });
+
+    // Super+N shows workspace N; Super+Shift+N sends the focused window there.
+    for (int n = 1; n <= 9; n++)
+    {
+        const xkb_keysym_t sym = XKB_KEY_1 + (n - 1);
+        bind(super, sym, [this, n] { focusWorkspace(n); });
+        bind(mods, sym, [this, n] { windowToWorkspace(n); });
+    }
 }
 
 void
