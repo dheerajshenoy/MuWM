@@ -7,6 +7,9 @@ initArgs(argparse::ArgumentParser &parser)
     parser.add_argument("-s", "--spawn")
         .help("Command to spawn on startup")
         .metavar("CMD");
+    parser.add_argument("--check-config")
+        .help("Load the Lua config, report any errors and exit")
+        .flag();
 }
 
 int
@@ -26,9 +29,16 @@ main(int argc, char **argv)
         return 1;
     }
 
-    initLogging(WLR_INFO); // MUWM_LOG=debug for more
+    const bool checkOnly = parser.get<bool>("--check-config");
+    if (checkOnly)
+        wlr_log_init(WLR_INFO, nullptr); // to stderr, not the log file
+    else
+        initLogging(WLR_INFO); // MUWM_LOG=debug for more
 
     MuWM wm(parser);
+    if (checkOnly)
+        return wm.checkConfig() ? 0 : 1;
+
     if (!wm.ok())
     {
         wlr_log(WLR_ERROR, "Failed to initialize compositor");

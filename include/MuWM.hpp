@@ -54,6 +54,7 @@ public:
     }
     void publishOutputConfig(); // tell wlr-output-management clients (kanshi)
     void loadConfig();
+    bool checkConfig(); // load the config without starting; false on errors
     void quit();
 
     wlr_output_layout *layout() const
@@ -288,7 +289,9 @@ private:
     void updateWorkspaceHidden(Workspace *ws);
 
 private:
-    bool m_ok = false;
+    bool m_ok           = false;
+    bool m_checkOnly    = false; // --check-config: no backend, no side effects
+    bool m_configFailed = false; // the last loadConfig() hit an error
     void failConfig();
     void installDefaultBindings();
     const argparse::ArgumentParser &m_parser;

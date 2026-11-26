@@ -67,8 +67,9 @@ toplevelFromXdg(wlr_xdg_toplevel *xdg)
 
 MuWM::MuWM(const argparse::ArgumentParser &parser) : m_parser(parser)
 {
+    m_checkOnly = parser.get<bool>("--check-config");
     initLua();
-    m_ok = init();
+    m_ok = m_checkOnly || init();
 }
 
 MuWM::~MuWM()
@@ -974,6 +975,7 @@ MuWM::installDefaultBindings()
 void
 MuWM::failConfig()
 {
+    m_configFailed = true;
     // A half-run config may have rebound the defaults; make sure a way to
     // quit and to open a terminal exists.
     installDefaultBindings();
@@ -1574,6 +1576,9 @@ MuWM::onCursorFrame(void *)
 void
 MuWM::spawn(const std::string &cmd)
 {
+    if (m_checkOnly)
+        return; // checking the config must not start programs
+
     // Fork twice so the program is adopted by init and never becomes a
     // zombie. Ignoring SIGCHLD instead would be inherited by Xwayland and break
     // its xkbcomp child ("Failed to compile keymap").
@@ -1924,6 +1929,22 @@ MuWM::clearBindings()
         if (b.ref != LUA_NOREF)
             luaL_unref(m_lua, LUA_REGISTRYINDEX, b.ref);
     m_keybindings.clear();
+}
+
+bool
+MuWM::checkConfig()
+{
+    if (!m_lua)
+        return false;
+
+    // Timers and deferred updates need an event loop; nothing else of the
+    // compositor is created.
+    m_display = wl_display_create();
+    if (!m_display)
+        return false;
+
+    loadConfig();
+    return !m_configFailed;
 }
 
 void

@@ -1927,6 +1927,8 @@ MuWM::loadConfig()
         return;
     }
 
+    m_configFailed = false;
+
     const auto path = configFilePath();
     if (path.empty() || !std::filesystem::exists(path))
     {
