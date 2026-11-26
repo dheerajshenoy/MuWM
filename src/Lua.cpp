@@ -1305,6 +1305,104 @@ luaBind(lua_State *L)
     return 0;
 }
 
+// "swipe3+left": a swipe with N fingers in a direction.
+std::optional<std::pair<int, wlr_direction>>
+parseGesture(std::string_view s)
+{
+    const size_t plus = s.find('+');
+    if (plus == std::string_view::npos)
+        return std::nullopt;
+
+    const std::string_view kind = s.substr(0, plus);
+    const std::string_view dir  = s.substr(plus + 1);
+    if (kind.size() != 6 || kind.substr(0, 5) != "swipe"
+        || !std::isdigit(static_cast<unsigned char>(kind[5])))
+        return std::nullopt;
+
+    const int fingers = kind[5] - '0';
+    if (fingers < 2) // a one-finger swipe is just pointer motion
+        return std::nullopt;
+
+    wlr_direction d;
+    if (dir == "left")
+        d = WLR_DIRECTION_LEFT;
+    else if (dir == "right")
+        d = WLR_DIRECTION_RIGHT;
+    else if (dir == "up")
+        d = WLR_DIRECTION_UP;
+    else if (dir == "down")
+        d = WLR_DIRECTION_DOWN;
+    else
+        return std::nullopt;
+    return std::make_pair(fingers, d);
+}
+
+// clang-format off
+/*lua
+  ---Bind a touchpad swipe to an action. An action is a Lua function or a shell
+  ---command (which is spawned). Call it with one swipe and an action, or with a
+  ---table of `["swipe3+left"] = action` entries. A swipe is "swipe" and the
+  ---number of fingers (2 to 9), a "+", and a direction. A swipe with a finger
+  ---count that has an action is kept by the compositor; all others still reach
+  ---the focused window. The action runs once per swipe, as soon as the fingers
+  ---have moved mu.config.gestures.swipe_threshold. Binding a swipe again
+  ---replaces the old action.
+  ---@param swipes string|table<string, fun()|string> A swipe like "swipe3+left", or a table of swipes to actions
+  ---@param action? fun()|string The function to call, or the command to spawn; only when `swipes` is a string
+  function mu.gesture(swipes, action) end
+*/
+// clang-format on
+void
+gestureOne(lua_State *L, int spec, int action)
+{
+    if (lua_type(L, spec) != LUA_TSTRING)
+        luaL_error(L, "mu.gesture: swipes must be strings like \"swipe3+left\"");
+    if (lua_type(L, action) != LUA_TFUNCTION
+        && lua_type(L, action) != LUA_TSTRING)
+        luaL_error(L, "mu.gesture: the action must be a function or a command");
+
+    const char *s = lua_tostring(L, spec);
+    const auto parsed = parseGesture(s);
+    if (!parsed)
+        luaL_error(L,
+                   "invalid gesture '%s' (expected \"swipe3+left\", with "
+                   "left, right, up or down)",
+                   s);
+
+    MuWM *wm = wmFrom(L);
+    if (lua_type(L, action) == LUA_TFUNCTION)
+    {
+        lua_pushvalue(L, action);
+        // pops the copy, returns its ref
+        const int ref = luaL_ref(L, LUA_REGISTRYINDEX);
+        wm->addGesture(parsed->first, parsed->second, ref);
+    }
+    else
+    {
+        std::string cmd = lua_tostring(L, action);
+        wm->addGesture(parsed->first, parsed->second, LUA_NOREF,
+                       [wm, cmd] { wm->spawn(cmd); });
+    }
+}
+
+int
+luaGesture(lua_State *L)
+{
+    if (lua_type(L, 1) != LUA_TTABLE)
+    {
+        gestureOne(L, 1, 2);
+        return 0;
+    }
+
+    lua_pushnil(L);
+    while (lua_next(L, 1) != 0)
+    {
+        gestureOne(L, lua_gettop(L) - 1, lua_gettop(L)); // key, value
+        lua_pop(L, 1);
+    }
+    return 0;
+}
+
 // clang-format off
 /*lua
   ---Spawn a shell command
@@ -1959,6 +2057,7 @@ MuWM::loadConfig()
 
     // On reload, everything the old config registered must go away.
     clearBindings();
+    clearGestures();
     installDefaultBindings();
     m_eventBus.clear();
     clearLuaTimers();
@@ -1984,7 +2083,7 @@ MuWM::initLuaBindings()
     // function (locals would dangle as soon as it returned).
     static Group rootGroup, configGroup, borderGroup, keyboardGroup, mouseGroup,
         touchpadGroup, gapsGroup, layoutGroup, cursorGroup, dimGroup,
-        opacityGroup;
+        opacityGroup, gesturesGroup;
 
     registerHandle<WindowKind>(m_lua);
     registerHandle<WorkspaceKind>(m_lua);
@@ -2157,6 +2256,15 @@ MuWM::initLuaBindings()
                    1.0f),
     };
 
+    // lua ---@class mu.config.gestures
+    gesturesGroup.fields = {
+        // lua ---@field swipe_threshold? number How far the fingers have to move
+        // before a swipe bound with mu.gesture counts, in touchpad units. Must
+        // be between 1 and 10000.
+        floatField("swipe_threshold", &m_config.gestures.swipe_threshold,
+                   MuWM::ChangeNone, 1.0f, 10000.0f),
+    };
+
     // clang-format off
     // lua ---@class mu.config
     configGroup.fields = {
@@ -2185,6 +2293,9 @@ MuWM::initLuaBindings()
         // window is inserted in the layout.
         enumField("new_client_position", &m_config.new_client_position,
                   &kNewClientPositionNames, MuWM::ChangeLayout),
+
+        // lua ---@field gestures mu.config.gestures Touchpad gesture options.
+        subField("gestures", &gesturesGroup),
 
         // lua ---@field dim mu.config.dim Dimming options.
         subField("dim", &dimGroup),
@@ -2284,6 +2395,7 @@ MuWM::initLuaBindings()
         funcField("move_to_output", luaMoveToOutput),
         funcField("spawn", luaSpawn),
         funcField("bind", luaBind),
+        funcField("gesture", luaGesture),
         funcField("rule", luaRule),
         funcField("on", luaOn<false>),
         funcField("once", luaOn<true>),

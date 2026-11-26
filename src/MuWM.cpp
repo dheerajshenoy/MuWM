@@ -13,6 +13,7 @@
 #include "XUnmanaged.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <csignal>
 #include <cstring>
 #include <filesystem>
@@ -149,6 +150,17 @@ MuWM::~MuWM()
     m_toplevelTagSet.unbind();
     m_toplevelTagDescriptionSet.unbind();
     m_newDialog.unbind();
+    m_pinchBegin.unbind();
+    m_pinchUpdate.unbind();
+    m_pinchEnd.unbind();
+    m_swipeBegin.unbind();
+    m_swipeUpdate.unbind();
+    m_swipeEnd.unbind();
+    m_holdBegin.unbind();
+    m_holdEnd.unbind();
+    m_bellRing.unbind();
+    m_setIcon.unbind();
+    m_keyboardInhibit.unbind();
 
     if (m_outputListener.listener.link.prev)
         wl_list_remove(&m_outputListener.listener.link);
@@ -452,6 +464,13 @@ MuWM::init()
     m_pinchUpdate.bind<&MuWM::onPinchUpdate>(&m_cursor->events.pinch_update,
                                              this);
     m_pinchEnd.bind<&MuWM::onPinchEnd>(&m_cursor->events.pinch_end, this);
+
+    m_swipeBegin.bind<&MuWM::onSwipeBegin>(&m_cursor->events.swipe_begin, this);
+    m_swipeUpdate.bind<&MuWM::onSwipeUpdate>(&m_cursor->events.swipe_update,
+                                             this);
+    m_swipeEnd.bind<&MuWM::onSwipeEnd>(&m_cursor->events.swipe_end, this);
+    m_holdBegin.bind<&MuWM::onHoldBegin>(&m_cursor->events.hold_begin, this);
+    m_holdEnd.bind<&MuWM::onHoldEnd>(&m_cursor->events.hold_end, this);
 
     m_contentType = wlr_content_type_manager_v1_create(m_display, 1);
 
@@ -4002,4 +4021,134 @@ MuWM::setSticky(Toplevel *t, bool sticky)
 
     t->sticky = sticky;
     t->updateBorder();
+}
+
+void
+MuWM::onSwipeBegin(void *data)
+{
+    auto *ev = static_cast<wlr_pointer_swipe_begin_event *>(data);
+    notifyActivity();
+
+    // Decide now, because a client has to see a swipe from begin to end. A
+    // swipe with a finger count we have an action for is ours, unless the
+    // session is locked.
+    m_swipe          = {};
+    m_swipe.fingers  = ev->fingers;
+    m_swipe.consumed = !m_locked
+                       && std::ranges::any_of(m_gestures,
+                                              [&](const GestureBinding &g)
+    { return g.fingers == static_cast<int>(ev->fingers); });
+    if (m_swipe.consumed)
+        return;
+
+    wlr_pointer_gestures_v1_send_swipe_begin(m_pointerGestures, m_seat,
+                                             ev->time_msec, ev->fingers);
+}
+
+void
+MuWM::onSwipeUpdate(void *data)
+{
+    auto *ev = static_cast<wlr_pointer_swipe_update_event *>(data);
+    if (!m_swipe.consumed)
+    {
+        wlr_pointer_gestures_v1_send_swipe_update(
+            m_pointerGestures, m_seat, ev->time_msec, ev->dx, ev->dy);
+        return;
+    }
+    if (m_swipe.fired)
+        return; // one action per swipe
+
+    m_swipe.dx += ev->dx;
+    m_swipe.dy += ev->dy;
+    if (std::hypot(m_swipe.dx, m_swipe.dy) < m_config.gestures.swipe_threshold)
+        return;
+
+    // The axis the fingers moved furthest along decides the direction.
+    wlr_direction dir;
+    if (std::abs(m_swipe.dx) > std::abs(m_swipe.dy))
+        dir = m_swipe.dx < 0 ? WLR_DIRECTION_LEFT : WLR_DIRECTION_RIGHT;
+    else
+        dir = m_swipe.dy < 0 ? WLR_DIRECTION_UP : WLR_DIRECTION_DOWN;
+
+    m_swipe.fired = true;
+    runGesture(m_swipe.fingers, dir);
+}
+
+void
+MuWM::runGesture(int fingers, wlr_direction dir)
+{
+    for (const GestureBinding &g : m_gestures)
+    {
+        if (g.fingers != fingers || g.dir != dir)
+            continue;
+
+        if (g.native)
+        {
+            const auto action = g.native; // the action may change the bindings
+            action();
+            return;
+        }
+        if (g.ref == LUA_NOREF)
+            return;
+
+        lua_rawgeti(m_lua, LUA_REGISTRYINDEX, g.ref); // read g.ref *before*
+        if (lua_pcall(m_lua, 0, 0, 0) != LUA_OK)      // the call: it may reload
+        {
+            wlr_log(WLR_ERROR, "gesture: %s", lua_tostring(m_lua, -1));
+            lua_pop(m_lua, 1);
+        }
+        return;
+    }
+}
+
+void
+MuWM::addGesture(int fingers, wlr_direction dir, int ref,
+                 std::function<void()> native)
+{
+    for (GestureBinding &g : m_gestures)
+        if (g.fingers == fingers && g.dir == dir)
+        {
+            if (g.ref != LUA_NOREF)
+                luaL_unref(m_lua, LUA_REGISTRYINDEX, g.ref);
+            g.ref    = ref;
+            g.native = std::move(native);
+            return;
+        }
+    m_gestures.push_back({fingers, dir, ref, std::move(native)});
+}
+
+void
+MuWM::clearGestures()
+{
+    for (const GestureBinding &g : m_gestures)
+        if (g.ref != LUA_NOREF)
+            luaL_unref(m_lua, LUA_REGISTRYINDEX, g.ref);
+    m_gestures.clear();
+}
+
+void
+MuWM::onSwipeEnd(void *data)
+{
+    auto *ev = static_cast<wlr_pointer_swipe_end_event *>(data);
+    if (!m_swipe.consumed)
+        wlr_pointer_gestures_v1_send_swipe_end(m_pointerGestures, m_seat,
+                                               ev->time_msec, ev->cancelled);
+    m_swipe = {};
+}
+
+void
+MuWM::onHoldBegin(void *data)
+{
+    auto *ev = static_cast<wlr_pointer_hold_begin_event *>(data);
+    notifyActivity();
+    wlr_pointer_gestures_v1_send_hold_begin(m_pointerGestures, m_seat,
+                                            ev->time_msec, ev->fingers);
+}
+
+void
+MuWM::onHoldEnd(void *data)
+{
+    auto *ev = static_cast<wlr_pointer_hold_end_event *>(data);
+    wlr_pointer_gestures_v1_send_hold_end(m_pointerGestures, m_seat,
+                                          ev->time_msec, ev->cancelled);
 }

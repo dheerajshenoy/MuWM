@@ -104,5 +104,6 @@ struct Config
 
     struct Gestures
     {
+        float swipe_threshold = 100.0f; // how far fingers move before a swipe counts
     } gestures;
 };

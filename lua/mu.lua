@@ -128,6 +128,9 @@
 ---@field unfocused? number Opacity of unfocused windows: 0 is fully transparent, 1 is opaque.
 ---@field modal? number Opacity of a window while one of its modal dialogs is open; the lower of this and the focus opacity wins.
 
+---@class mu.config.gestures
+---@field swipe_threshold? number How far the fingers have to move before a swipe bound with mu.gesture counts, in touchpad units. Must be between 1 and 10000.
+
 ---@class mu.config
 ---@field keyboard mu.config.keyboard Keyboard layout options.
 ---@field mouse mu.config.mouse Mouse options.
@@ -137,6 +140,7 @@
 ---@field cursor mu.config.cursor Cursor options.
 ---@field layout mu.config.layout Layout options.
 ---@field new_client_position mu.NewClientPosition Where a new window is inserted in the layout.
+---@field gestures mu.config.gestures Touchpad gesture options.
 ---@field dim mu.config.dim Dimming options.
 ---@field opacity mu.config.opacity Opacity options.
 ---@field workspaces string[] Workspace names; their number is the workspace count.
@@ -171,6 +175,18 @@ mu = {}
 ---@param keys string|table<string, fun()|string> A key like "Super+Shift+q", or a table of keys to actions
 ---@param action? fun()|string The function to call, or the command to spawn; only when `keys` is a string
 function mu.bind(keys, action) end
+
+---Bind a touchpad swipe to an action. An action is a Lua function or a shell
+---command (which is spawned). Call it with one swipe and an action, or with a
+---table of `["swipe3+left"] = action` entries. A swipe is "swipe" and the
+---number of fingers (2 to 9), a "+", and a direction. A swipe with a finger
+---count that has an action is kept by the compositor; all others still reach
+---the focused window. The action runs once per swipe, as soon as the fingers
+---have moved mu.config.gestures.swipe_threshold. Binding a swipe again
+---replaces the old action.
+---@param swipes string|table<string, fun()|string> A swipe like "swipe3+left", or a table of swipes to actions
+---@param action? fun()|string The function to call, or the command to spawn; only when `swipes` is a string
+function mu.gesture(swipes, action) end
 
 ---Spawn a shell command
 ---@param cmd string The command to run

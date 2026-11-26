@@ -183,6 +183,12 @@ public:
     void spawn(const std::string &cmd);
     void addBinding(Binding b);
     void clearBindings();
+    // A swipe with `fingers` fingers in direction `dir`. An action is a Lua
+    // callback (a registry ref) or a native function. Binding the same swipe
+    // again replaces the old action.
+    void addGesture(int fingers, wlr_direction dir, int ref,
+                    std::function<void()> native = {});
+    void clearGestures();
 
     EventBus &eventBus()
     {
@@ -255,6 +261,12 @@ private:
     void onPinchBegin(void *data);
     void onPinchUpdate(void *data);
     void onPinchEnd(void *data);
+    void runGesture(int fingers, wlr_direction dir);
+    void onSwipeBegin(void *data);
+    void onSwipeUpdate(void *data);
+    void onSwipeEnd(void *data);
+    void onHoldBegin(void *data);
+    void onHoldEnd(void *data);
     void onSetIcon(void *data);
     void onNewDialog(void *data);
     void onToplevelTagSet(void *data);
@@ -356,6 +368,11 @@ private:
     Listener<MuWM> m_pinchBegin;
     Listener<MuWM> m_pinchUpdate;
     Listener<MuWM> m_pinchEnd;
+    Listener<MuWM> m_swipeBegin;
+    Listener<MuWM> m_swipeUpdate;
+    Listener<MuWM> m_swipeEnd;
+    Listener<MuWM> m_holdBegin;
+    Listener<MuWM> m_holdEnd;
     Listener<MuWM> m_cursorMotion;
     Listener<MuWM> m_cursorMotionAbs;
     Listener<MuWM> m_cursorButton;
@@ -451,4 +468,20 @@ private:
     std::string m_bellSetting; // the bell_sound value m_bellFile came from
     std::string m_bellFile;    // resolved sound file; empty means silent
     bool m_bellResolved = false;
+
+    struct GestureBinding
+    {
+        int fingers       = 0;
+        wlr_direction dir = WLR_DIRECTION_LEFT;
+        int ref           = LUA_NOREF; // Lua callback, if any
+        std::function<void()> native;  // built-in action
+    };
+    std::vector<GestureBinding> m_gestures;
+
+    struct SwipeState
+    {
+        bool consumed = false, fired = false;
+        uint32_t fingers = 0;
+        double dx = 0, dy = 0;
+    } m_swipe;
 };
