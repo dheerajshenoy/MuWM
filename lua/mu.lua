@@ -11,41 +11,84 @@
 ---Names accepted by mu.on and mu.once.
 ---@alias mu.Event
 ---| "startup" # The compositor is up (fires once, not on reload).
----| "config_reload" # The config was reloaded successfully.
----| "window_open" # A window appeared.
----| "window_close" # A window went away; the table is a snapshot.
+---| "config.reload" # The config was reloaded successfully.
+---| "window.open" # A window appeared; its handler gets the window.
+---| "window.close" # A window went away; its handler gets the (now invalid) window.
 
----Table passed to window event handlers.
+---A window. A handle: it stays usable for as long as the window exists, and
+---afterwards reads give the last known values (see valid) while writes do
+---nothing. Windows compare equal when they are the same window.
 ---@class mu.Window
 ---@field id integer Stable id of the window.
 ---@field title string Window title; may still be empty when it opens.
 ---@field app_id string Application id (the class), e.g. "foot".
+---@field workspace mu.Workspace|nil The workspace it is on. Assign a workspace, its index or its name to move the window there.
+---@field output mu.Output|nil The output it is on. Assign an output or its name to move the window there.
+---@field floating boolean Whether the window floats. Assignable.
+---@field fullscreen boolean Whether the window is fullscreen. Assignable.
+---@field focused boolean Whether the window has focus. Assign true to focus it.
+---@field x integer Left edge in layout coordinates.
+---@field y integer Top edge in layout coordinates.
 ---@field width integer Current surface width in pixels.
 ---@field height integer Current surface height in pixels.
----@field workspace string Name of the workspace the window is on.
----@field output string Name of the output the window is on.
----@field focused boolean Whether the window had focus.
+---@field valid boolean Whether the window still exists.
 ---@field close fun(self: mu.Window) Ask the window to close; does nothing if it is gone.
 ---@field focus fun(self: mu.Window) Focus the window, switching to its workspace first.
----@field toggle_fullscreen fun(self: mu.Window)
----@field toggle_floating fun(self: mu.Window)
----@field move_to_workspace fun(self: mu.Window, workspace: integer|string, focus?: boolean)
+---@field move_to_workspace fun(self: mu.Window, workspace: mu.Workspace|integer|string, focus?: boolean) Move the window to a workspace. With focus, switch to that workspace and focus the window; without it the window stays where it is on screen. Defaults to mu.config.focus_moved_window.
 
----@class mu.opts.cursor
+---A workspace of one output, e.g. "3". A handle like mu.Window.
+---@class mu.Workspace
+---@field id integer Unique id; names are only unique per output.
+---@field name string The workspace name.
+---@field index integer Its 1-based position in mu.config.workspaces.
+---@field output mu.Output|nil The output it belongs to.
+---@field windows mu.Window[] The windows on it.
+---@field visible boolean Whether it is the one shown on its output.
+---@field urgent boolean Whether a window on it asked for attention.
+---@field master_ratio number Share of the screen the master area takes, 0 to 1. Assignable.
+---@field valid boolean Whether the workspace still exists.
+---@field show fun(self: mu.Workspace) Show it on its output and focus that output.
+
+---A monitor. A handle like mu.Window; outputs are identified by name.
+---@class mu.Output
+---@field name string The connector name, e.g. "DP-1".
+---@field description string Make and model, when known.
+---@field x integer Left edge in layout coordinates.
+---@field y integer Top edge in layout coordinates.
+---@field width integer Width in layout pixels.
+---@field height integer Height in layout pixels.
+---@field scale number Output scale.
+---@field focused boolean Whether it is the focused output.
+---@field workspace mu.Workspace|nil The workspace it shows. Assign a workspace of this output, its index or its name to show it.
+---@field valid boolean Whether the output is still connected.
+---@field focus fun(self: mu.Output) Focus the output and move the pointer to it.
+---@field neighbor fun(self: mu.Output, dir: "up"|"down"|"left"|"right"): mu.Output|nil The output next to this one in a direction.
+
+---Returned by mu.on and mu.once.
+---@class mu.Listener
+---@field id integer
+---@field off fun(self: mu.Listener): boolean Remove the handler; returns whether it was still registered.
+
+---Returned by mu.after and mu.every.
+---@class mu.Timer
+---@field id integer
+---@field cancel fun(self: mu.Timer): boolean Stop the timer; returns whether it was still pending.
+
+---@class mu.config.cursor
 ---@field size? integer Cursor size in pixels. Must be between 1 and 1000.
 ---@field theme? string Cursor theme name.
 
----@class mu.opts.border
+---@class mu.config.border
 ---@field width? integer Border width in pixels. Must be between 0 and 1000.
 ---@field focused? mu.Color Border color for the focused window.
 ---@field unfocused? mu.Color Border color for unfocused windows.
 ---@field smart? boolean Whether to hide borders when only one window is visible.
 ---@field fullscreen? boolean Whether to draw a border around fullscreen windows.
 
----@class mu.opts.layout
+---@class mu.config.layout
 ---@field master_ratio? number The ratio of the master area to the whole screen. Must be between 0 and 1.
 
----@class mu.opts.keyboard
+---@class mu.config.keyboard
 ---@field rules? string XKB rules file name.
 ---@field model? string XKB model name.
 ---@field layout? string XKB layout name.
@@ -54,40 +97,41 @@
 ---@field repeat_rate? integer Keyboard repeat rate in characters per second.
 ---@field repeat_delay? integer Keyboard repeat delay in milliseconds.
 
----@class mu.opts.gaps
----@field value? integer Window gap in pixels.
+---@class mu.config.gaps
+---@field size? integer Window gap in pixels.
 ---@field smart? boolean Whether to hide gaps when only one window is visible.
 
----@class mu.opts
----@field keyboard mu.opts.keyboard Keyboard layout options.
----@field touchpad mu.opts.touchpad Touchpad options.
----@field gaps mu.opts.gaps Window gap options.
----@field border mu.opts.border Window border options.
----@field cursor mu.opts.cursor Cursor options.
----@field layout mu.opts.layout Layout options.
----@field new_client_position mu.NewClientPosition Where a new window is inserted in the layout.
----@field workspaces string[] Workspace names; their number is the workspace count.
----@field dynamic_workspaces boolean Whether to create and destroy workspaces on demand, instead of using the fixed list in mu.opts.workspaces.
----@field focus_moved_window boolean Whether moving a window to another workspace also switches to that workspace and focuses the window. Calls can override it per move.
----@field focus_follows_mouse boolean Whether to focus a window when the mouse enters it.
----@field raise_on_focus boolean Whether to raise a window when it is focused.
----@field apply_tearing boolean Whether to apply tearing to windows that request it.
-
----@class mu.opts.touchpad
+---@class mu.config.touchpad
 ---@field natural_scroll? boolean Whether to enable natural scrolling on the touchpad.
 ---@field tap_to_click? boolean Whether to enable tap-to-click on the touchpad.
 ---@field disable_while_typing? boolean Whether to disable the touchpad while typing.
 ---@field middle_emulation? boolean Whether to enable middle button emulation on the touchpad.
 
+---@class mu.config
+---@field keyboard mu.config.keyboard Keyboard layout options.
+---@field touchpad mu.config.touchpad Touchpad options.
+---@field gaps mu.config.gaps Window gap options.
+---@field border mu.config.border Window border options.
+---@field cursor mu.config.cursor Cursor options.
+---@field layout mu.config.layout Layout options.
+---@field new_client_position mu.NewClientPosition Where a new window is inserted in the layout.
+---@field workspaces string[] Workspace names; their number is the workspace count.
+---@field dynamic_workspaces boolean Whether to create and destroy workspaces on demand, instead of using the fixed list in mu.config.workspaces.
+---@field focus_moved_window boolean Whether moving a window to another workspace also switches to that workspace and focuses the window. Calls can override it per move.
+---@field focus_follows_mouse boolean Whether to focus a window when the mouse enters it.
+---@field raise_on_focus boolean Whether to raise a window when it is focused.
+---@field apply_tearing boolean Whether to apply tearing to windows that request it.
+
 ---@class mu
----@field opts mu.opts User-configurable options.
+---@field config mu.config Options. Assign them one by one (mu.config.gaps.size = 8) or call it with a table: mu.config { ... }.
+---@field window mu.Window|nil The focused window, if any.
+---@field windows mu.Window[] All windows.
+---@field workspace mu.Workspace|nil The workspace shown on the focused output.
+---@field workspaces mu.Workspace[] The workspaces of the focused output, in order. Also indexable by name: mu.workspaces.web.
+---@field output mu.Output|nil The focused output, if any.
+---@field outputs mu.Output[] All outputs. Also indexable by name: mu.outputs["DP-1"].
 ---@field toggle_fullscreen fun() Toggle fullscreen for the focused window.
 ---@field toggle_floating fun() Toggle floating for the focused window.
----@field focus_next fun() Focus the next window.
----@field focus_prev fun() Focus the previous window.
----@field swap_next fun() Swap the focused window with the next window.
----@field swap_prev fun() Swap the focused window with the previous window.
----@field swap_master fun() Swap the focused window with the master window.
 ---@field workspace_next fun() Switch to the next workspace.
 ---@field workspace_prev fun() Switch to the previous workspace.
 ---@field close fun() Close the focused window.
@@ -95,54 +139,70 @@
 ---@field reload fun() Reload the config file.
 mu = {}
 
----Bind a key to a Lua function
----@param spec string The key binding specification, e.g. "Ctrl+Alt+T"
----@param handler fun() The Lua function to call when the key is pressed
-function mu.keybind(spec, handler) end
+---Bind keys to actions. An action is a Lua function or a shell command (which
+---is spawned). Call it with one key and an action, or with a table of
+---`["Super+Return"] = action` entries. Binding a key again replaces the old
+---action.
+---@param keys string|table<string, fun()|string> A key like "Super+Shift+q", or a table of keys to actions
+---@param action? fun()|string The function to call, or the command to spawn; only when `keys` is a string
+function mu.bind(keys, action) end
 
 ---Spawn a shell command
 ---@param cmd string The command to run
 function mu.spawn(cmd) end
 
----Focus the nearest window in the given direction, or the next output if
----there is none
----@param dir string One of "up", "down", "left", "right"
-function mu.focus(dir) end
+---Focus the nearest window in a direction, or the next output if there is
+---none; or cycle through the windows of the workspace.
+---@param where "up"|"down"|"left"|"right"|"next"|"prev"
+function mu.focus(where) end
 
----Focus the next output in the given direction
----@param dir string One of "up", "down", "left", "right"
+---Swap the focused window with a neighbour in the stack, or with the master.
+---@param with "next"|"prev"|"master"
+function mu.swap(with) end
+
+---Focus the output in the given direction
+---@param dir "up"|"down"|"left"|"right"
 function mu.focus_output(dir) end
 
 ---Move the focused window to the output in the given direction
----@param dir string One of "up", "down", "left", "right"
+---@param dir "up"|"down"|"left"|"right"
 function mu.move_to_output(dir) end
 
----Focus a workspace by index
----@param index integer|string The workspace index (1-based) or name
-function mu.focus_workspace(index) end
+---Write a message to the compositor log
+---@param message string
+function mu.log(message) end
 
----Set the ratio of the master area to the whole screen
----@param ratio number The ratio, between 0 and 1
-function mu.set_master_ratio(ratio) end
-
----Move the focused window to a workspace by index or name
----@param index integer|string The workspace index (1-based) or name
----@param focus? boolean Follow the window: switch to its workspace and focus it. Defaults to mu.opts.focus_moved_window.
-function mu.window_to_workspace(index, focus) end
-
----Register an event handler
----@param event mu.Event The event name
----@param handler fun(window?: mu.Window) The handler function; window events pass a table describing the window, startup and config_reload pass nothing
----@return integer id The handler ID, which can be used to remove it with mu.off(id)
+---Register an event handler. Window events pass the window; startup and
+---config.reload pass nothing.
+---@param event mu.Event
+---@param handler fun(window?: mu.Window)
+---@return mu.Listener listener Call listener:off() to remove the handler
 function mu.on(event, handler) end
 
----Register a one-time event handler
----@param event mu.Event The event name
----@param handler fun(window?: mu.Window) The handler function; window events pass a table describing the window, startup and config_reload pass nothing
----@return integer id The handler ID, which can be used to remove it with mu.off(id)
+---Register a handler that runs once, on the next occurrence of the event
+---@param event mu.Event
+---@param handler fun(window?: mu.Window)
+---@return mu.Listener listener Call listener:off() to remove the handler
 function mu.once(event, handler) end
 
----Remove an event handler by ID
----@param id integer The handler ID returned by mu.on or mu.once
----@return boolean removed Whether a handler was removed
-function mu.off(id) end
+---Apply properties to every new window that matches. All keys of `match`
+---must match: a string must equal the window's property (workspaces and
+---outputs are compared by name), a function is called as fn(value, window)
+---and returns whether it matches. `apply` is a table of properties to
+---assign (floating, fullscreen, workspace, output), or a function called
+---with the window; use a function when the order of changes matters.
+---@param match table<string, string|boolean|number|fun(value: any, window: mu.Window): boolean>
+---@param apply table<string, any>|fun(window: mu.Window)
+function mu.rule(match, apply) end
+
+---Call a function once after a delay
+---@param ms integer Delay in milliseconds, at least 1
+---@param fn fun()
+---@return mu.Timer timer
+function mu.after(ms, fn) end
+
+---Call a function repeatedly
+---@param ms integer Interval in milliseconds, at least 1
+---@param fn fun()
+---@return mu.Timer timer
+function mu.every(ms, fn) end

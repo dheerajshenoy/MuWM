@@ -60,6 +60,8 @@ MuWM::MuWM(const argparse::ArgumentParser &parser) : m_parser(parser)
 
 MuWM::~MuWM()
 {
+    clearLuaTimers(); // event sources: must go before the display
+
     if (m_applyIdle)
         wl_event_source_remove(m_applyIdle);
 
@@ -1032,14 +1034,19 @@ WindowInfo
 MuWM::windowInfo(const Toplevel *t) const
 {
     WindowInfo info;
-    info.id     = t->id;
-    info.title  = t->title();
-    info.appId  = t->appId();
-    info.width  = t->surface()->current.width;
-    info.height = t->surface()->current.height;
+    info.id         = t->id;
+    info.title      = t->title();
+    info.appId      = t->appId();
+    info.x          = t->tree->node.x;
+    info.y          = t->tree->node.y;
+    info.width      = t->surface()->current.width;
+    info.height     = t->surface()->current.height;
+    info.floating   = t->floating;
+    info.fullscreen = t->fullscreen;
     if (const Workspace *ws = t->workspace)
     {
-        info.workspace = ws->name;
+        info.workspace   = ws->name;
+        info.workspaceId = ws->id;
         if (ws->output)
             info.output = ws->output->output->name;
         info.focused = ws->focusedToplevel == t;
@@ -1926,9 +1933,14 @@ MuWM::focusOutput(wlr_direction dir)
     if (!m_focusedOutput || m_locked)
         return;
 
-    Output *out = adjacentOutput(dir);
-    if (!out)
-        return; // no monitor in that direction
+    focusOutput(adjacentOutput(dir)); // null: no monitor in that direction
+}
+
+void
+MuWM::focusOutput(Output *out)
+{
+    if (!out || m_locked)
+        return;
 
     setFocusedOutput(out);
 
@@ -1954,20 +1966,31 @@ MuWM::moveToOutput(wlr_direction dir)
     if (!t)
         return; // nothing to move
 
-    if (t->floating)
-    {
-        const wlr_box &from = m_focusedOutput->usableArea;
-        const wlr_box &to   = out->usableArea;
-        t->floatBox.x += to.x - from.x;
-        t->floatBox.y += to.y - from.y;
-    }
-    toplevelToWorkspace(t, out->workspace);
+    moveToOutput(t, out);
 
     wlr_box b;
     wlr_output_layout_get_box(m_layout, out->output, &b);
     wlr_cursor_warp(m_cursor, nullptr, b.x + b.width / 2.0,
                     b.y + b.height / 2.0);
     refreshPointerFocus();
+}
+
+void
+MuWM::moveToOutput(Toplevel *t, Output *out)
+{
+    if (!t || !out || !out->workspace || m_locked)
+        return;
+
+    Output *from = t->workspace ? t->workspace->output : nullptr;
+    if (from == out)
+        return; // already there
+
+    if (t->floating && from)
+    {
+        t->floatBox.x += out->usableArea.x - from->usableArea.x;
+        t->floatBox.y += out->usableArea.y - from->usableArea.y;
+    }
+    toplevelToWorkspace(t, out->workspace);
 }
 
 void
@@ -2146,6 +2169,19 @@ MuWM::windowToWorkspace(Toplevel *t, int index, MoveFocus focus)
 
     // Follow the window: show its workspace and focus it. Without this a
     // window moved to a hidden workspace stays out of sight and out of focus.
+    if (focus.value_or(m_config.focus_moved_window))
+        activateToplevel(t);
+}
+
+void
+MuWM::windowToWorkspace(Toplevel *t, Workspace *ws, MoveFocus focus)
+{
+    if (!t || !ws)
+        return;
+
+    toplevelToWorkspace(t, ws);
+
+    // Follow the window, as the index and name overloads do.
     if (focus.value_or(m_config.focus_moved_window))
         activateToplevel(t);
 }
@@ -3172,12 +3208,18 @@ MuWM::wantsTearing(const Output *o) const
 Output *
 MuWM::adjacentOutput(wlr_direction dir)
 {
-    if (!m_focusedOutput)
+    return adjacentOutput(m_focusedOutput, dir);
+}
+
+Output *
+MuWM::adjacentOutput(Output *from, wlr_direction dir)
+{
+    if (!from)
         return nullptr;
     wlr_box box;
-    wlr_output_layout_get_box(m_layout, m_focusedOutput->output, &box);
+    wlr_output_layout_get_box(m_layout, from->output, &box);
     wlr_output *next = wlr_output_layout_adjacent_output(
-        m_layout, dir, m_focusedOutput->output, box.x + box.width / 2.0,
+        m_layout, dir, from->output, box.x + box.width / 2.0,
         box.y + box.height / 2.0);
     return next && next->data ? static_cast<Output *>(next->data) : nullptr;
 }
@@ -3186,6 +3228,7 @@ Workspace *
 MuWM::createWorkspace(Output *o, const std::string &name, size_t index)
 {
     auto *w      = new Workspace{};
+    w->id        = ++m_globalWorkspaceId;
     w->name      = name;
     w->output    = o;
     w->sceneTree = wlr_scene_tree_create(m_windowTree);
@@ -3459,6 +3502,89 @@ MuWM::toplevelById(uint64_t id)
             return t;
 
     return nullptr;
+}
+
+std::vector<Toplevel *>
+MuWM::allToplevels() const
+{
+    std::vector<Toplevel *> all;
+    for (const Output *o : m_outputs)
+        for (const Workspace *ws : o->workspaces)
+            all.insert(all.end(), ws->toplevels.begin(), ws->toplevels.end());
+    all.insert(all.end(), m_unassigned.toplevels.begin(),
+               m_unassigned.toplevels.end());
+    return all;
+}
+
+Workspace *
+MuWM::workspaceById(uint64_t id)
+{
+    if (id == 0)
+        return nullptr;
+    for (Output *o : m_outputs)
+        for (Workspace *ws : o->workspaces)
+            if (ws->id == id)
+                return ws;
+    return nullptr;
+}
+
+Output *
+MuWM::outputByName(const std::string &name)
+{
+    for (Output *o : m_outputs)
+        if (name == o->output->name)
+            return o;
+    return nullptr;
+}
+
+// The workspace called `name` on `o`, created if it doesn't exist yet.
+Workspace *
+MuWM::workspaceNamed(Output *o, const std::string &name)
+{
+    const auto &names = m_config.workspaces;
+    const auto it     = std::ranges::find(names, name);
+    if (!o || it == names.end())
+        return nullptr;
+    return workspaceAt(o, static_cast<size_t>(it - names.begin()));
+}
+
+WorkspaceInfo
+MuWM::workspaceInfo(const Workspace *ws) const
+{
+    WorkspaceInfo info;
+    info.id          = ws->id;
+    info.name        = ws->name;
+    info.index       = static_cast<int>(ws->slot) + 1;
+    info.windowCount = static_cast<int>(ws->toplevels.size());
+    info.urgent      = ws->urgent;
+    info.masterRatio
+        = ws->masterRatio >= 0.0f ? ws->masterRatio : m_config.layout.master_ratio;
+    if (ws->output)
+    {
+        info.output  = ws->output->output->name;
+        info.visible = ws->output->workspace == ws;
+    }
+    return info;
+}
+
+OutputInfo
+MuWM::outputInfo(const Output *out) const
+{
+    OutputInfo info;
+    info.name = out->output->name;
+    if (out->output->description)
+        info.description = out->output->description;
+    info.scale       = out->output->scale;
+    info.focused     = out == m_focusedOutput;
+    info.workspaceId = out->workspace ? out->workspace->id : 0;
+
+    wlr_box b = {};
+    wlr_output_layout_get_box(m_layout, out->output, &b);
+    info.x      = b.x;
+    info.y      = b.y;
+    info.width  = b.width;
+    info.height = b.height;
+    return info;
 }
 
 void

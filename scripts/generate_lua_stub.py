@@ -34,7 +34,7 @@ KIND_TYPE = {
 }
 
 BLOCK_RE = re.compile(r"/\*lua[ \t]*\n(.*?)\*/", re.DOTALL)
-FIELD_CALL_RE = re.compile(r"\b(string|int|bool|float|color|enum|sub|func|stringList)Field\(\s*\"(\w+)\"")
+FIELD_CALL_RE = re.compile(r"\b(string|int|bool|float|color|enum|sub|func|getter|stringList)Field\(\s*\"(\w+)\"")
 GROUP_RE = re.compile(r"\b(\w+Group)\.fields\s*=\s*\{")
 
 
@@ -169,34 +169,29 @@ def parse(text):
 
     # Event names and window fields must match the code.
     body_all = "\n".join(b for _, b in blocks)
-    docs_events = set(re.findall(r'^---\|\s+"(\w+)"', body_all, re.M))
-    code_events = set(re.findall(r'^\s*\{\s*"(\w+)",\s*EventType::', text, re.M))
+    docs_events = set(re.findall(r'^---\|\s+"([\w.]+)"', body_all, re.M))
+    code_events = set(re.findall(r'^\s*\{\s*"([\w.]+)",\s*EventType::', text, re.M))
     if docs_events != code_events:
         problems.add(1, "mu.Event aliases differ from kEventNames: "
                         f"docs-only {sorted(docs_events - code_events)}, "
                         f"code-only {sorted(code_events - docs_events)}")
 
-    wm = re.search(r"---@class mu\.Window\n(.*?)(?:\n\s*\n|\Z)", body_all, re.S)
-    # Fields typed `fun(...)` are methods on the "mu.window" metatable
-    # (kWindowMethods); the rest are data set by pushWindow.
-    win_fields = re.findall(r"---@field\s+(\w+)\s+(\S+)", wm.group(1)) if wm else []
-    doc_win = {n for n, t in win_fields if not t.startswith("fun(")}
-    doc_methods = {n for n, t in win_fields if t.startswith("fun(")}
-
-    pm = re.search(r"^pushWindow\(.*?^\}", text, re.S | re.M)
-    code_win = set(re.findall(r'lua_setfield\(L, -2, "(\w+)"\)', pm.group(0))) \
-        if pm else set()
-    km = re.search(r"kWindowMethods\[\]\s*=\s*\{(.*?)\};", text, re.S)
-    code_methods = set(re.findall(r'\{\s*"(\w+)"', km.group(1))) if km else set()
-
-    if doc_win != code_win:
-        problems.add(1, "mu.Window fields differ from pushWindow: "
-                        f"docs-only {sorted(doc_win - code_win)}, "
-                        f"code-only {sorted(code_win - doc_win)}")
-    if doc_methods != code_methods:
-        problems.add(1, "mu.Window methods differ from kWindowMethods: "
-                        f"docs-only {sorted(doc_methods - code_methods)}, "
-                        f"code-only {sorted(code_methods - doc_methods)}")
+    # Handle classes: every documented field must be a property or method in
+    # the matching table in the code, and the other way round.
+    for cls, table in (("mu.Window", "kWindowProps"),
+                       ("mu.Workspace", "kWorkspaceProps"),
+                       ("mu.Output", "kOutputProps")):
+        cm = re.search(rf"---@class {re.escape(cls)}\n(.*?)(?:\n\s*\n|\Z)",
+                       body_all, re.S)
+        doc_names = set(re.findall(r"---@field\s+(\w+)\s", cm.group(1))) if cm else set()
+        tm = re.search(rf"{table}\[\]\s*=\s*\{{(.*?)\n\}};", text, re.S)
+        code_names = set(re.findall(r'\{\s*"(\w+)"', tm.group(1))) if tm else set()
+        if not cm or not tm:
+            problems.add(1, f"{cls}: cannot find its docs or {table}")
+        elif doc_names != code_names:
+            problems.add(1, f"{cls} fields differ from {table}: "
+                            f"docs-only {sorted(doc_names - code_names)}, "
+                            f"code-only {sorted(code_names - doc_names)}")
 
     return blocks, groups, problems
 

@@ -88,6 +88,8 @@ public:
                            MoveFocus focus = std::nullopt);
     void windowToWorkspace(Toplevel *t, const std::string &name,
                            MoveFocus focus = std::nullopt);
+    void windowToWorkspace(Toplevel *t, Workspace *ws,
+                           MoveFocus focus = std::nullopt);
     void toggleFullscreen();
     void toggleFullscreen(Toplevel *t);
     void toggleFloating();
@@ -97,7 +99,36 @@ public:
     void setMasterRatio(Workspace *ws, float ratio);
     void changeVt(int vt);
     void focusOutput(wlr_direction dir);
+    void focusOutput(Output *out);
     void moveToOutput(wlr_direction dir);
+    void moveToOutput(Toplevel *t, Output *out);
+
+    // What the Lua API needs to find and change things by handle.
+    wl_event_loop *eventLoop() const
+    {
+        return wl_display_get_event_loop(m_display);
+    }
+    Output *focusedOutput() const
+    {
+        return m_focusedOutput;
+    }
+    const std::vector<Output *> &outputs() const
+    {
+        return m_outputs;
+    }
+    std::vector<Toplevel *> allToplevels() const;
+    WorkspaceInfo workspaceInfo(const Workspace *ws) const;
+    OutputInfo outputInfo(const Output *out) const;
+    Workspace *workspaceById(uint64_t id);
+    Output *outputByName(const std::string &name);
+    Workspace *workspaceAt(Output *o,
+                           size_t slot); // for on demand created workspaces
+    Workspace *workspaceNamed(Output *o, const std::string &name);
+    void switchWorkspace(Output *, Workspace *);
+    void toplevelToWorkspace(Toplevel *, Workspace *);
+    void setFocusedOutput(Output *out);
+    Output *adjacentOutput(Output *from, wlr_direction dir);
+    void clearLuaTimers();
 
     enum Change
     {
@@ -237,8 +268,6 @@ private:
     void initLua();
     void initLuaBindings();
     void cycleWorkspace(int delta);
-    void switchWorkspace(Output *, Workspace *);
-    void toplevelToWorkspace(Toplevel *, Workspace *);
     void evacuateInactiveOutputs();
     void updateFullscreenLayers(Output *);
     void placeFloating(Toplevel *);
@@ -247,15 +276,12 @@ private:
     void endGrab();
     void insertNewTopLevel(std::vector<Toplevel *> &toplevels, Toplevel *t);
     Output *adjacentOutput(wlr_direction dir);
-    void setFocusedOutput(Output *out);
     Workspace *createWorkspace(Output *o, const std::string &name,
                                size_t index);
     void applyWorkspaces();
     void applyCursor();
     Toplevel *nextToplevel(wlr_direction dir);
     void clearUrgent(Workspace *ws);
-    Workspace *workspaceAt(Output *o,
-                           size_t slot); // for on demand created workspaces
     void updateWorkspaceHidden(Workspace *ws);
 
 private:
@@ -399,6 +425,7 @@ private:
     std::vector<Binding> m_keybindings;
     EventBus m_eventBus;
 
+    uint64_t m_globalWorkspaceId = 0; // ids for Workspace::id, from 1
     uint64_t m_globalTopLevelId
         = 0; // incremented for each new toplevel, used to identify it in events
 

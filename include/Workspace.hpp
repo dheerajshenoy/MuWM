@@ -15,6 +15,7 @@ struct Workspace
     std::vector<Toplevel *> focusHistory; // most recent last
     std::vector<Toplevel *> toplevels;
     std::string name;
+    uint64_t id = 0; // unique and stable; 0 means none
     bool urgent = false;
     size_t slot;
     float masterRatio = -1.0f; // < 0: use the configured default

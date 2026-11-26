@@ -62,20 +62,29 @@
 - Settings can change at runtime and are reapplied to all devices.
 
 ### Lua configuration
-- `mu` global table with `mu.opts` and functions such as `mu.keybind`,
-  `mu.spawn`, `mu.reload`, focus, swap, close and quit.
-- Workspace functions, `toggle_fullscreen` and `toggle_floating`.
-- `mu.focus(dir)` focuses the nearest window in a direction (`up`, `down`,
-  `left` or `right`), or the next output when there is none.
-- `mu.opts.new_client_position` sets where new windows go:
+- `mu` global table. Options live in `mu.config`, set one by one
+  (`mu.config.gaps.size = 8`) or with a table (`mu.config { ... }`). Changes
+  take effect immediately; string colors such as `"#rrggbb"` work.
+- Windows, workspaces and outputs are objects with properties:
+  `mu.window` (focused), `mu.windows`, `mu.workspace`, `mu.workspaces`
+  (also by name), `mu.output`, `mu.outputs` (also by name). State is read and
+  assigned (`w.floating = true`, `w.workspace = "web"`, `w.fullscreen`,
+  `ws.master_ratio`, `out.workspace`); actions are methods (`w:close()`,
+  `ws:show()`, `out:neighbor("left")`). Objects keep working after the window
+  closes (`w.valid`).
+- `mu.bind` takes a key and a function or shell command, or a table of them.
+- `mu.rule(match, apply)` applies properties to new windows.
+- `mu.focus(where)` (a direction, `next` or `prev`), `mu.swap`,
+  `mu.focus_output`, `mu.move_to_output`, `mu.spawn`, `mu.reload`, `mu.quit`,
+  `mu.log`, `toggle_fullscreen` and `toggle_floating`.
+- `mu.after` and `mu.every` run functions on a timer; both return a timer with
+  `cancel()`.
+- Events: `mu.on` and `mu.once` return a listener with `off()`. Available
+  events are `startup`, `config.reload`, `window.open` and `window.close`.
+- `mu.config.new_client_position` sets where new windows go:
   `after_current`, `before_current`, `top` or `bottom`.
-- String colors such as `"#rrggbb"`.
-- Option changes take effect immediately.
-- Config reload clears duplicate bindings. A failing config falls back to the
-  default bindings.
-- Events: `mu.on`, `mu.once` and `mu.off`.
-  Available events are `startup`, `config_reload`, `window_open` and
-  `window_close`. The window events carry typed payloads.
+- Config reload clears bindings, rules, handlers and timers. A failing config
+  falls back to the default bindings.
 - A generated LuaLS stub for editor completion.
 
 ### Infrastructure
