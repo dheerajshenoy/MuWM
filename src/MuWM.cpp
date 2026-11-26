@@ -958,6 +958,8 @@ MuWM::installDefaultBindings()
     };
     addBinding(std::move(terminalKey));
 
+    bind(mods, XKB_KEY_r, [this] { loadConfig(); });
+
     bind(super, XKB_KEY_j, [this] { focusNext(); });
     bind(super, XKB_KEY_k, [this] { focusPrev(); });
     bind(mods, XKB_KEY_j, [this] { swapNext(); });
