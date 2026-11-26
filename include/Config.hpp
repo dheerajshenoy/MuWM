@@ -71,15 +71,14 @@ struct Config
 
     struct Dim
     {
-        bool unfocused = false;
-        bool modal     = true;
-        float factor = 0.5f;
+        float unfocused = 0.0f; // black overlay alpha; 0 = off
+        float modal     = 0.0f; // for a window with a modal dialog open
     } dim;
 
     struct Opacity
     {
-        bool unfocused = false;
-        bool modal     = true;
-        float factor   = 0.5f;
+        float focused   = 1.0f; // 1 = opaque (off)
+        float unfocused = 1.0f;
+        float modal     = 1.0f; // for a window with a modal dialog open
     } opacity;
 };

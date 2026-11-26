@@ -254,6 +254,7 @@ private:
     void onPinchUpdate(void *data);
     void onPinchEnd(void *data);
     void onSetIcon(void *data);
+    void onNewDialog(void *data);
     void onToplevelTagSet(void *data);
     void onToplevelTagDescriptionSet(void *data);
 
@@ -334,6 +335,7 @@ private:
         *m_toplevelCaptureManager = nullptr;
     wlr_keyboard_shortcuts_inhibit_manager_v1 *m_shortcutInhibitManager
         = nullptr;
+    wlr_xdg_wm_dialog_v1 *m_dialogManager = nullptr;
 
     Output *m_focusedOutput = nullptr;
     std::vector<Output *> m_outputs;
@@ -383,6 +385,7 @@ private:
     Listener<MuWM> m_keyboardInhibit;
     Listener<MuWM> m_toplevelTagSet;
     Listener<MuWM> m_toplevelTagDescriptionSet;
+    Listener<MuWM> m_newDialog;
 
     // Super+drag: left button moves a window, right button resizes it.
     enum class Grab

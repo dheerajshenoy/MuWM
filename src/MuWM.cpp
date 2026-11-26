@@ -1,6 +1,7 @@
 #include "MuWM.hpp"
 
 #include "Decoration.hpp"
+#include "Dialog.hpp"
 #include "IdleInhibitor.hpp"
 #include "Keyboard.hpp"
 #include "LayerShellSurface.hpp"
@@ -127,6 +128,7 @@ MuWM::~MuWM()
     m_dragIconDestroy.unbind();
     m_toplevelTagSet.unbind();
     m_toplevelTagDescriptionSet.unbind();
+    m_newDialog.unbind();
 
     if (m_outputListener.listener.link.prev)
         wl_list_remove(&m_outputListener.listener.link);
@@ -415,6 +417,10 @@ MuWM::init()
 
     m_toplevelTagDescriptionSet.bind<&MuWM::onToplevelTagDescriptionSet>(
         &m_tagManager->events.set_description, this);
+
+    m_dialogManager = wlr_xdg_wm_dialog_v1_create(m_display, 1);
+    m_newDialog.bind<&MuWM::onNewDialog>(&m_dialogManager->events.new_dialog,
+                                         this);
 
     m_iconManager = wlr_xdg_toplevel_icon_manager_v1_create(m_display, 1);
     m_setIcon.bind<&MuWM::onSetIcon>(&m_iconManager->events.set_icon, this);
@@ -3653,4 +3659,15 @@ MuWM::onToplevelTagDescriptionSet(void *data)
     if (!t || !ev->description)
         return;
     t->tagDescription = ev->description;
+}
+
+void
+MuWM::onNewDialog(void *data)
+{
+    auto *dialog = static_cast<wlr_xdg_dialog_v1 *>(data);
+    auto *w      = new Dialog{};
+    w->wm        = this;
+    w->setModal.bind<&Dialog::onSetModal>(&dialog->events.set_modal, w);
+    w->destroy.bind<&Dialog::onDestroy>(&dialog->events.destroy, w);
+    scheduleApply(ChangeRecolor); // the dialog may already be modal
 }

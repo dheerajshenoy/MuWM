@@ -114,14 +114,13 @@
 ---@field middle_emulation? boolean Whether to enable middle button emulation on the touchpad.
 
 ---@class mu.config.dim
----@field unfocused? boolean Whether to dim inactive windows.
----@field modal? boolean Whether to dim inactive windows only when a modal window is open.
----@field factor? number The dimming factor for inactive windows, between 0 and 1.
+---@field unfocused? number How dark unfocused windows get: 0 leaves them unchanged, 1 makes them black.
+---@field modal? number How dark a window gets while one of its modal dialogs is open: 0 leaves it unchanged, 1 makes it black.
 
 ---@class mu.config.opacity
----@field unfocused? boolean Whether to make inactive windows transparent.
----@field modal? boolean Whether to make inactive windows transparent only when a modal window is open.
----@field factor? number The opacity factor for inactive windows, between 0 and 1.
+---@field focused? number Opacity of the focused window: 0 is fully transparent, 1 is opaque.
+---@field unfocused? number Opacity of unfocused windows: 0 is fully transparent, 1 is opaque.
+---@field modal? number Opacity of a window while one of its modal dialogs is open; the lower of this and the focus opacity wins.
 
 ---@class mu.config
 ---@field keyboard mu.config.keyboard Keyboard layout options.

@@ -41,6 +41,7 @@ struct Toplevel
     bool fullscreen                                   = false;
     bool floating                                     = false;
     bool focused                                      = false;
+    bool faded                                        = false;
     wlr_box slot = {}; // size the layout asked for; the borders never exceed it
 
     // The size limits seen at the last commit, to notice when a client changes
@@ -73,6 +74,7 @@ struct Toplevel
 
     void setFocused(bool focused);
     void updateDim();
+    void updateOpacity();
     void resizeBorders(int w, int h);
     void setBordersVisible(bool visible);
 
@@ -89,6 +91,8 @@ struct Toplevel
     const char *appId() const; // never null
     bool isDialog() const;     // has a parent window
     bool isFixedSize() const;  // min size equals max size
+    bool isModal() const;
+    bool hasModalChild() const;
 
     int sentW = -1, sentH = -1; // last size we asked an xdg client for
     int borderW = -1, borderH = -1,

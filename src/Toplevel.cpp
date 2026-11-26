@@ -2,6 +2,36 @@
 
 #include "MuWM.hpp"
 
+namespace
+{
+static void
+applyOpacity(wlr_scene_buffer *buffer, int, int, void *data)
+{
+    wlr_scene_buffer_set_opacity(buffer, *static_cast<float *>(data));
+}
+} // namespace
+
+// A faded window shows through to whatever is behind it. This replaces the
+// alpha a client asked for while it is faded.
+void
+Toplevel::updateOpacity()
+{
+    if (!surfaceTree)
+        return;
+
+    const auto &cfg = wm->config().opacity;
+    float value     = focused ? cfg.focused : cfg.unfocused;
+    if (cfg.modal < value && hasModalChild())
+        value = cfg.modal;
+
+    const bool fade = value < 1.0f;
+    if (!fade && !faded)
+        return; // nothing to apply or undo; leave the client's alpha alone
+
+    faded = fade;
+    wlr_scene_node_for_each_buffer(&surfaceTree->node, applyOpacity, &value);
+}
+
 void
 Toplevel::onMap(void *)
 {
@@ -89,6 +119,9 @@ Toplevel::onCommit(void *)
     // The client's real size is only known once it commits.
     if (workspace && !fullscreen)
         fitBorders();
+
+    if (faded)
+        updateOpacity();
 
     // A client may change its min/max size at any time. Re-lay out so the
     // window is clamped to the new limits.
@@ -187,6 +220,7 @@ Toplevel::setFocused(bool focused)
                                         ? wm->config().border.focused_color
                                         : wm->config().border.unfocused_color);
     updateDim();
+    updateOpacity();
 }
 
 wlr_surface *
@@ -487,10 +521,42 @@ Toplevel::updateDim()
         dim->node.data      = this;
     }
 
-    const auto &cfg      = wm->config().dim;
-    const float color[4] = {0, 0, 0, cfg.factor};
+    const auto &cfg = wm->config().dim;
+    float amount    = focused ? 0.0f : cfg.unfocused;
+    if (cfg.modal > amount && hasModalChild())
+        amount = cfg.modal;
+
+    const float color[4] = {0, 0, 0, amount};
     wlr_scene_rect_set_color(dim, color);
     wlr_scene_rect_set_size(dim, borderW > 0 ? borderW : 1,
                             borderH > 0 ? borderH : 1);
-    wlr_scene_node_set_enabled(&dim->node, cfg.unfocused && !focused);
+    wlr_scene_node_set_enabled(&dim->node, amount > 0.0f);
+}
+
+bool
+Toplevel::isModal() const
+{
+    if (xsurface)
+        return xsurface->modal;
+    const wlr_xdg_dialog_v1 *dialog
+        = wlr_xdg_dialog_v1_try_from_wlr_xdg_toplevel(xdg);
+    return dialog && dialog->modal;
+}
+
+bool
+Toplevel::hasModalChild() const
+{
+    if (!workspace)
+        return false;
+    for (const Toplevel *other : workspace->toplevels)
+    {
+        if (other == this || !other->isModal())
+            continue;
+        const bool child
+            = xsurface ? other->xsurface && other->xsurface->parent == xsurface
+                       : other->xdg && other->xdg->parent == xdg;
+        if (child)
+            return true;
+    }
+    return false;
 }

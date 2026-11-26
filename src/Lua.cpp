@@ -2100,34 +2100,33 @@ MuWM::initLuaBindings()
 
     // lua ---@class mu.config.dim
     dimGroup.fields = {
-        // lua ---@field unfocused? boolean Whether to dim inactive windows.
-        boolField("unfocused", &m_config.dim.unfocused, MuWM::ChangeRecolor),
+        // lua ---@field unfocused? number How dark unfocused windows get: 0
+        // leaves them unchanged, 1 makes them black.
+        floatField("unfocused", &m_config.dim.unfocused, MuWM::ChangeRecolor,
+                   0.0f, 1.0f),
 
-        // lua ---@field modal? boolean Whether to dim inactive windows only
-        // when a modal window is open.
-        boolField("modal", &m_config.dim.modal, MuWM::ChangeRecolor),
-
-        // lua ---@field factor? number The dimming factor for inactive windows,
-        // between 0 and 1.
-        floatField("factor", &m_config.dim.factor, MuWM::ChangeRecolor, 0.0f,
+        // lua ---@field modal? number How dark a window gets while one of its
+        // modal dialogs is open: 0 leaves it unchanged, 1 makes it black.
+        floatField("modal", &m_config.dim.modal, MuWM::ChangeRecolor, 0.0f,
                    1.0f),
     };
 
     // lua ---@class mu.config.opacity
     opacityGroup.fields = {
-        // lua ---@field unfocused? boolean Whether to make inactive windows
-        // transparent.
-        boolField("unfocused", &m_config.opacity.unfocused,
-                  MuWM::ChangeRecolor),
-
-        // lua ---@field modal? boolean Whether to make inactive windows
-        // transparent only when a modal window is open.
-        boolField("modal", &m_config.opacity.modal, MuWM::ChangeRecolor),
-
-        // lua ---@field factor? number The opacity factor for inactive windows,
-        // between 0 and 1.
-        floatField("factor", &m_config.opacity.factor, MuWM::ChangeRecolor,
+        // lua ---@field focused? number Opacity of the focused window: 0 is
+        // fully transparent, 1 is opaque.
+        floatField("focused", &m_config.opacity.focused, MuWM::ChangeRecolor,
                    0.0f, 1.0f),
+
+        // lua ---@field unfocused? number Opacity of unfocused windows: 0 is
+        // fully transparent, 1 is opaque.
+        floatField("unfocused", &m_config.opacity.unfocused,
+                   MuWM::ChangeRecolor, 0.0f, 1.0f),
+
+        // lua ---@field modal? number Opacity of a window while one of its
+        // modal dialogs is open; the lower of this and the focus opacity wins.
+        floatField("modal", &m_config.opacity.modal, MuWM::ChangeRecolor, 0.0f,
+                   1.0f),
     };
 
     // clang-format off
