@@ -31,6 +31,7 @@
 ---@field floating boolean Whether the window floats. Assignable.
 ---@field fullscreen boolean Whether the window is fullscreen. Assignable.
 ---@field focused boolean Whether the window has focus. Assign true to focus it.
+---@field sticky boolean Whether the window follows you to every workspace of its output. Sticky windows float. Assignable.
 ---@field x integer Left edge in layout coordinates.
 ---@field y integer Top edge in layout coordinates.
 ---@field width integer Current surface width in pixels.

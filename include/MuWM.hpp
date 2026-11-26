@@ -97,6 +97,7 @@ public:
     void toggleFloating(Toplevel *t);
     void setFloating(Toplevel *, bool floating);
     void setFullscreen(Toplevel *, bool fullscreen);
+    void setSticky(Toplevel *, bool sticky);
     void setMasterRatio(Workspace *ws, float ratio);
     void changeVt(int vt);
     void focusOutput(wlr_direction dir);
@@ -342,7 +343,7 @@ private:
     wlr_keyboard_shortcuts_inhibit_manager_v1 *m_shortcutInhibitManager
         = nullptr;
     wlr_xdg_wm_dialog_v1 *m_dialogManager = nullptr;
-    wlr_xdg_system_bell_v1 *m_systemBell = nullptr;
+    wlr_xdg_system_bell_v1 *m_systemBell  = nullptr;
 
     Output *m_focusedOutput = nullptr;
     std::vector<Output *> m_outputs;

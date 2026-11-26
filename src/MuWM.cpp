@@ -1232,6 +1232,7 @@ MuWM::windowInfo(const Toplevel *t) const
     info.height         = t->surface()->current.height;
     info.floating       = t->floating;
     info.fullscreen     = t->fullscreen;
+    info.sticky         = t->sticky;
     info.tag            = t->tag;
     info.tagDescription = t->tagDescription;
     if (const Workspace *ws = t->workspace)
@@ -2437,6 +2438,31 @@ MuWM::switchWorkspace(Output *out, Workspace *ws_target)
     wlr_scene_node_set_enabled(&ws_old->sceneTree->node, false);
     wlr_scene_node_set_enabled(&ws_target->sceneTree->node, true);
     out->workspace = ws_target;
+
+    // Move sticky windows to the new workspace
+    for (Toplevel *t : std::vector<Toplevel *>(ws_old->toplevels))
+    {
+        if (!t->sticky || t->fullscreen)
+            continue;
+
+        const bool hadFocus = ws_old->focusedToplevel == t;
+        std::erase(ws_old->toplevels, t);
+        std::erase(ws_old->focusHistory, t);
+        if (hadFocus)
+            ws_old->focusedToplevel = nullptr;
+
+        t->workspace = ws_target;
+        ws_target->toplevels.push_back(t);
+        wlr_scene_node_reparent(&t->tree->node, ws_target->sceneTree);
+
+        if (hadFocus)
+        {
+            std::erase(ws_target->focusHistory, t);
+            ws_target->focusHistory.push_back(t);
+            ws_target->focusedToplevel
+                = t; // focusToplevel(next) re-activates it
+        }
+    }
 
     wlr_ext_workspace_handle_v1_set_active(ws_old->handle, false);
     wlr_ext_workspace_handle_v1_set_active(ws_target->handle, true);
@@ -3900,8 +3926,8 @@ MuWM::playBellSound()
     {
         m_bellResolved = true;
         m_bellSetting  = m_config.bell_sound;
-        m_bellFile     = m_bellSetting == "default" ? defaultBellSound()
-                                                    : m_bellSetting;
+        m_bellFile
+            = m_bellSetting == "default" ? defaultBellSound() : m_bellSetting;
 
         std::error_code ec;
         if (!m_bellFile.empty() && !std::filesystem::exists(m_bellFile, ec))
@@ -3933,10 +3959,12 @@ MuWM::playBellSound()
     posix_spawnattr_setsigmask(&attr, &none);
     posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETSIGMASK);
 
-    char *argv[] = {const_cast<char *>("sh"), const_cast<char *>("-c"),
+    char *argv[] = {const_cast<char *>("sh"),
+                    const_cast<char *>("-c"),
                     const_cast<char *>("pw-play \"$1\" &"),
                     const_cast<char *>("sh"),
-                    const_cast<char *>(m_bellFile.c_str()), nullptr};
+                    const_cast<char *>(m_bellFile.c_str()),
+                    nullptr};
     pid_t pid;
     if (posix_spawn(&pid, "/bin/sh", nullptr, &attr, argv, environ) == 0)
         waitpid(pid, nullptr, 0);
@@ -3958,4 +3986,19 @@ MuWM::onBellRing(void *data)
     }
 
     playBellSound();
+}
+
+void
+MuWM::setSticky(Toplevel *t, bool sticky)
+{
+    if (!t || t->sticky == sticky)
+        return;
+
+    if (sticky && t->workspace)
+    {
+        arrange(t->workspace);
+        wlr_scene_node_raise_to_top(&t->tree->node);
+    }
+
+    t->sticky = sticky;
 }

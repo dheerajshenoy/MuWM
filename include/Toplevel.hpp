@@ -42,6 +42,7 @@ struct Toplevel
     bool floating                                     = false;
     bool focused                                      = false;
     bool faded                                        = false;
+    bool sticky                                       = false;
     wlr_box slot = {}; // size the layout asked for; the borders never exceed it
 
     // The size limits seen at the last commit, to notice when a client changes
