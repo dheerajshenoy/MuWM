@@ -52,17 +52,35 @@ struct Config
 
     struct KeyboardConfig
     {
-        std::string rules, model, layout, variant, xkb_options;
+        std::string file, rules, model, layout, variant, options;
         int repeat_rate  = 25;
         int repeat_delay = 600;
     } keyboard;
 
-    struct TouchpadConfig
+    struct PointerConfig
     {
+        std::string accel_profile = "adaptive";
+        float accel_speed         = 0.0f;
+        bool left_handed          = false;
         bool natural_scroll       = false;
-        bool tap_to_click         = true;
-        bool middle_emulation     = true;
-        bool disable_while_typing = true;
+        bool middle_emulation     = false;
+    };
+
+    struct MouseConfig : public PointerConfig
+    {
+        unsigned int rotation_angle = 0; // 0, 90, 180, 270
+    } mouse;
+
+    struct TouchpadConfig : public PointerConfig
+    {
+        bool tap_to_click          = true;
+        bool disable_while_typing  = true;
+        bool clickfinger_behavior  = false;
+        int drag_3fg               = 0;
+        int drag_lock              = 0;
+        bool flipx                 = false;
+        bool flipy                 = false;
+        std::string tap_button_map = "lrm";
     } touchpad;
 
     struct Layout
@@ -82,4 +100,8 @@ struct Config
         float unfocused = 1.0f;
         float modal     = 1.0f; // for a window with a modal dialog open
     } opacity;
+
+    struct Gestures
+    {
+    } gestures;
 };

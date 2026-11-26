@@ -94,6 +94,10 @@
 ---@class mu.config.layout
 ---@field master_ratio? number The ratio of the master area to the whole screen. Must be between 0 and 1.
 
+---@class mu.config.mouse
+---@field accel_profile? string Mouse acceleration profile name.
+---@field accel_speed? number Mouse acceleration speed, between -1 and 1.
+
 ---@class mu.config.keyboard
 ---@field rules? string XKB rules file name.
 ---@field model? string XKB model name.
@@ -124,6 +128,7 @@
 
 ---@class mu.config
 ---@field keyboard mu.config.keyboard Keyboard layout options.
+---@field mouse mu.config.mouse Mouse options.
 ---@field touchpad mu.config.touchpad Touchpad options.
 ---@field gaps mu.config.gaps Window gap options.
 ---@field border mu.config.border Window border options.

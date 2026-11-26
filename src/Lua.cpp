@@ -9,7 +9,6 @@
 #include <climits>
 #include <cmath>
 #include <cstring>
-#include <expected>
 #include <filesystem>
 #include <memory>
 #include <new>
@@ -1973,7 +1972,7 @@ MuWM::initLuaBindings()
 {
     // The proxies keep raw pointers to these, so they must outlive this
     // function (locals would dangle as soon as it returned).
-    static Group rootGroup, configGroup, borderGroup, keyboardGroup,
+    static Group rootGroup, configGroup, borderGroup, keyboardGroup, mouseGroup,
         touchpadGroup, gapsGroup, layoutGroup, cursorGroup, dimGroup,
         opacityGroup;
 
@@ -2038,6 +2037,18 @@ MuWM::initLuaBindings()
 
     };
 
+    // lua ---@class mu.config.mouse
+    mouseGroup.fields = {
+        // lua ---@field accel_profile? string Mouse acceleration profile name.
+        stringField("accel_profile", &m_config.mouse.accel_profile,
+                    MuWM::ChangePointer),
+
+        // lua ---@field accel_speed? number Mouse acceleration speed, between
+        // -1 and 1.
+        floatField("accel_speed", &m_config.mouse.accel_speed,
+                   MuWM::ChangePointer, -1.0f, 1.0f),
+    };
+
     // lua ---@class mu.config.keyboard
     keyboardGroup.fields = {
         // lua ---@field rules? string XKB rules file name.
@@ -2054,7 +2065,7 @@ MuWM::initLuaBindings()
 
         // lua ---@field xkb_options? string XKB options string, e.g.
         // "ctrl:nocaps".
-        stringField("xkb_options", &kb.xkb_options, MuWM::ChangeKeyboard),
+        stringField("xkb_options", &kb.options, MuWM::ChangeKeyboard),
 
         // lua ---@field repeat_rate? integer Keyboard repeat rate in characters
         // per second.
@@ -2136,6 +2147,9 @@ MuWM::initLuaBindings()
     configGroup.fields = {
         // lua ---@field keyboard mu.config.keyboard Keyboard layout options.
         subField("keyboard", &keyboardGroup),
+
+        // lua ---@field mouse mu.config.mouse Mouse options.
+        subField("mouse", &mouseGroup),
 
         // lua ---@field touchpad mu.config.touchpad Touchpad options.
         subField("touchpad", &touchpadGroup),

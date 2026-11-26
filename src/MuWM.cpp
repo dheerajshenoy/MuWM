@@ -24,6 +24,22 @@
 
 namespace
 {
+
+static libinput_config_accel_profile
+accelProfileFromString(const std::string &name)
+{
+    if (name == "flat")
+        return LIBINPUT_CONFIG_ACCEL_PROFILE_FLAT;
+    else if (name == "adaptive")
+        return LIBINPUT_CONFIG_ACCEL_PROFILE_ADAPTIVE;
+    else if (name == "none")
+        return LIBINPUT_CONFIG_ACCEL_PROFILE_NONE;
+    else if (name == "custom")
+        return LIBINPUT_CONFIG_ACCEL_PROFILE_CUSTOM;
+
+    return LIBINPUT_CONFIG_ACCEL_PROFILE_NONE;
+}
+
 bool
 isPrivilegedGlobal(const char *name)
 {
@@ -805,22 +821,33 @@ MuWM::applyKeyboardConfig(Keyboard *keyboard)
 {
     wlr_keyboard *kb = keyboard->kb;
     const auto &kc   = m_config.keyboard;
-
-    // Empty strings mean "use the xkb default".
-    auto opt = [](const std::string &s)
-    {
-        return s.empty() ? nullptr : s.c_str();
-    };
-    xkb_rule_names names = {};
-    names.rules          = opt(kc.rules);
-    names.model          = opt(kc.model);
-    names.layout         = opt(kc.layout);
-    names.variant        = opt(kc.variant);
-    names.options        = opt(kc.xkb_options);
-
     xkb_context *ctx = xkb_context_new(XKB_CONTEXT_NO_FLAGS);
-    xkb_keymap *km
-        = xkb_keymap_new_from_names(ctx, &names, XKB_KEYMAP_COMPILE_NO_FLAGS);
+    xkb_keymap *km   = nullptr;
+
+    if (!kc.file.empty())
+    {
+        FILE *f = fopen(kc.file.c_str(), "r");
+        km      = xkb_keymap_new_from_file(ctx, f, XKB_KEYMAP_FORMAT_TEXT_V1,
+                                           XKB_KEYMAP_COMPILE_NO_FLAGS);
+        fclose(f);
+    }
+    else
+    {
+        // Empty strings mean "use the xkb default".
+        auto opt = [](const std::string &s)
+        {
+            return s.empty() ? nullptr : s.c_str();
+        };
+        xkb_rule_names names = {};
+        names.rules          = opt(kc.rules);
+        names.model          = opt(kc.model);
+        names.layout         = opt(kc.layout);
+        names.variant        = opt(kc.variant);
+        names.options        = opt(kc.options);
+        km = xkb_keymap_new_from_names(ctx, &names,
+                                       XKB_KEYMAP_COMPILE_NO_FLAGS);
+    }
+
     bool configured = km != nullptr;
     if (!km && !kb->keymap)
     {
@@ -836,7 +863,7 @@ MuWM::applyKeyboardConfig(Keyboard *keyboard)
         if (configured)
             wlr_log(WLR_DEBUG, "keyboard %s: layout=%s variant=%s options=%s",
                     kb->base.name, kc.layout.c_str(), kc.variant.c_str(),
-                    kc.xkb_options.c_str());
+                    kc.options.c_str());
         wlr_keyboard_set_keymap(kb, km);
         xkb_keymap_unref(km);
     }
@@ -866,37 +893,139 @@ MuWM::applyPointerConfig(Pointer *pointer)
         libinput_device_config_scroll_set_method(dev,
                                                  LIBINPUT_CONFIG_SCROLL_2FG);
 
-    // These are touchpad options; only touchpads support tapping, so this
-    // leaves mice alone.
+    // Mouse
     if (libinput_device_config_tap_get_finger_count(dev) == 0)
-        return;
-
-    // Always write the full state: turning an option off must take effect too.
-    if (libinput_device_config_scroll_has_natural_scroll(dev))
     {
-        libinput_device_config_scroll_set_natural_scroll_enabled(
-            dev, m_config.touchpad.natural_scroll);
-        wlr_log(WLR_DEBUG, "%s: natural scroll wanted=%d now=%d",
+        // Accel
+        if (libinput_device_config_accel_is_available(dev))
+        {
+            libinput_device_config_accel_set_speed(dev,
+                                                   m_config.mouse.accel_speed);
+            libinput_device_config_accel_set_profile(
+                dev, accelProfileFromString(m_config.mouse.accel_profile));
+        }
+
+        // Left-handed
+        if (libinput_device_config_left_handed_is_available(dev))
+        {
+            libinput_device_config_left_handed_set(dev,
+                                                   m_config.mouse.left_handed);
+        }
+
+        // Rotation
+        if (libinput_device_config_rotation_is_available(dev))
+        {
+            libinput_device_config_rotation_set_angle(
+                dev, m_config.mouse.rotation_angle);
+        }
+    }
+    else // Touchpad
+    {
+
+        // Natural scroll
+        if (libinput_device_config_scroll_has_natural_scroll(dev))
+        {
+            libinput_device_config_scroll_set_natural_scroll_enabled(
+                dev, m_config.touchpad.natural_scroll);
+            wlr_log(
+                WLR_DEBUG, "%s: natural scroll wanted=%d now=%d",
                 pointer->device->name, m_config.touchpad.natural_scroll,
                 libinput_device_config_scroll_get_natural_scroll_enabled(dev));
-    }
+        }
 
-    if (libinput_device_config_tap_get_finger_count(dev) > 0)
+        // Tap-to-click
         libinput_device_config_tap_set_enabled(
             dev, m_config.touchpad.tap_to_click ? LIBINPUT_CONFIG_TAP_ENABLED
                                                 : LIBINPUT_CONFIG_TAP_DISABLED);
 
-    if (libinput_device_config_middle_emulation_is_available(dev))
-        libinput_device_config_middle_emulation_set_enabled(
-            dev, m_config.touchpad.middle_emulation
-                     ? LIBINPUT_CONFIG_MIDDLE_EMULATION_ENABLED
-                     : LIBINPUT_CONFIG_MIDDLE_EMULATION_DISABLED);
+        // Middle button emulation (3-finger tap)
+        if (libinput_device_config_middle_emulation_is_available(dev))
+            libinput_device_config_middle_emulation_set_enabled(
+                dev, m_config.touchpad.middle_emulation
+                         ? LIBINPUT_CONFIG_MIDDLE_EMULATION_ENABLED
+                         : LIBINPUT_CONFIG_MIDDLE_EMULATION_DISABLED);
 
-    if (libinput_device_config_dwt_is_available(dev))
-        libinput_device_config_dwt_set_enabled(
-            dev, m_config.touchpad.disable_while_typing
-                     ? LIBINPUT_CONFIG_DWT_ENABLED
-                     : LIBINPUT_CONFIG_DWT_DISABLED);
+        // Disable-while-typing
+        if (libinput_device_config_dwt_is_available(dev))
+            libinput_device_config_dwt_set_enabled(
+                dev, m_config.touchpad.disable_while_typing
+                         ? LIBINPUT_CONFIG_DWT_ENABLED
+                         : LIBINPUT_CONFIG_DWT_DISABLED);
+
+        // Acceleration
+        if (libinput_device_config_accel_is_available(dev))
+        {
+            libinput_device_config_accel_set_speed(
+                dev, m_config.touchpad.accel_speed);
+            libinput_device_config_accel_set_profile(
+                dev, accelProfileFromString(m_config.touchpad.accel_profile));
+        }
+
+        // Left-handed
+        if (libinput_device_config_left_handed_is_available(dev))
+            libinput_device_config_left_handed_set(
+                dev, m_config.touchpad.left_handed);
+
+        // Clickfinger behavior (1-finger left, 2-finger right, 3-finger middle)
+        if (m_config.touchpad.clickfinger_behavior)
+        {
+            libinput_device_config_click_set_method(
+                dev, LIBINPUT_CONFIG_CLICK_METHOD_CLICKFINGER);
+        }
+        else
+        {
+            libinput_device_config_click_set_method(
+                dev, LIBINPUT_CONFIG_CLICK_METHOD_BUTTON_AREAS);
+        }
+
+        // 3-finger drag
+        if (m_config.touchpad.drag_3fg > 0)
+        {
+            int drag_3fg = m_config.touchpad.drag_3fg;
+            libinput_config_3fg_drag_state drag_3fg_enum;
+            if (drag_3fg == 1)
+                drag_3fg_enum = LIBINPUT_CONFIG_3FG_DRAG_ENABLED_3FG;
+            else if (drag_3fg == 2)
+                drag_3fg_enum = LIBINPUT_CONFIG_3FG_DRAG_ENABLED_4FG;
+            else
+                drag_3fg_enum = LIBINPUT_CONFIG_3FG_DRAG_DISABLED;
+
+            libinput_device_config_3fg_drag_set_enabled(dev, drag_3fg_enum);
+        }
+
+        if (m_config.touchpad.drag_lock)
+        {
+            libinput_device_config_tap_set_drag_lock_enabled(
+                dev, m_config.touchpad.drag_3fg
+                         ? LIBINPUT_CONFIG_DRAG_LOCK_ENABLED
+                         : LIBINPUT_CONFIG_DRAG_LOCK_DISABLED);
+        }
+
+        if (m_config.touchpad.flipx)
+        {
+        }
+
+        if (m_config.touchpad.flipy)
+        {
+        }
+
+        // enum libinput_config_clickfinger_button_map {
+        // 	/** 1/2/3 finger click maps to left/right/middle */
+        // 	LIBINPUT_CONFIG_CLICKFINGER_MAP_LRM,
+        // 	/** 1/2/3 finger click maps to left/middle/right*/
+        // 	LIBINPUT_CONFIG_CLICKFINGER_MAP_LMR,
+        // };
+
+        libinput_config_clickfinger_button_map map;
+        if (m_config.touchpad.tap_button_map == "lrm")
+            map = LIBINPUT_CONFIG_CLICKFINGER_MAP_LRM;
+        else if (m_config.touchpad.tap_button_map == "lmr")
+            map = LIBINPUT_CONFIG_CLICKFINGER_MAP_LMR;
+        else
+            map = LIBINPUT_CONFIG_CLICKFINGER_MAP_LRM;
+
+        libinput_device_config_click_set_clickfinger_button_map(dev, map);
+    }
 }
 
 // Re-applies the settings to every existing device of the affected kinds.
