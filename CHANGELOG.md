@@ -1,5 +1,89 @@
 # CHANGELOG
 
+## 0.1.1
+
+### Lua configuration
+The Lua API was reworked, so a 0.1.0 `init.lua` needs updating:
+`mu.opts` is now `mu.config` (and `gaps.value` is `gaps.size`), `mu.keybind`
+is `mu.bind`, and event names use dots (`window.open`, `config.reload`).
+`mu.focus_next`/`focus_prev` became `mu.focus("next")`/`mu.focus("prev")`,
+`swap_next`/`swap_prev`/`swap_master` became `mu.swap(...)`, and
+`mu.focus_workspace`, `mu.window_to_workspace` and `mu.set_master_ratio` are
+properties and methods of the new objects. `mu.off(id)` is `listener:off()`.
+
+- Options live in `mu.config`, set one by one (`mu.config.gaps.size = 8`) or
+  with a table (`mu.config { ... }`).
+- Windows, workspaces and outputs are objects with properties: `mu.window`
+  (focused), `mu.windows`, `mu.workspace`, `mu.workspaces` (also by name),
+  `mu.output`, `mu.outputs` (also by name). State is read and assigned
+  (`w.floating = true`, `w.workspace = "web"`, `w.fullscreen`,
+  `ws.master_ratio`, `out.workspace`); actions are methods (`w:close()`,
+  `w:move_to_workspace(ws, focus)`, `ws:show()`, `out:neighbor("left")`).
+  Objects keep working after the window closes (`w.valid`).
+- Windows also have `x`, `y`, `width`, `height`, `focused`, `tag` and
+  `tag_description`.
+- `mu.bind` takes a key and a function or shell command, or a table of them.
+- `mu.rule(match, apply)` applies properties to new windows.
+- `mu.after` and `mu.every` run functions on a timer and return a timer with
+  `cancel()`. `mu.log` writes to the compositor log.
+- `mu.focus(where)` takes a direction, `next` or `prev`. `mu.swap` takes
+  `next`, `prev` or `master`.
+- Events: `mu.on` and `mu.once` return a listener with `off()`. New events are
+  `quit`, `window.fullscreen` and `workspace.change`, which passes the new
+  workspace.
+- New options: `dynamic_workspaces`, `focus_moved_window`, `apply_tearing`,
+  `cursor.theme`, `cursor.size`, `touchpad.middle_emulation`,
+  `touchpad.disable_while_typing`, `dim` and `opacity`.
+- Config reload clears bindings, rules, handlers and timers.
+
+### Windows and workspaces
+- Dynamic workspaces: with `dynamic_workspaces`, a workspace is created the
+  first time it is focused or receives a window, and empty inactive ones are
+  hidden from workspace clients.
+- A workspace's urgent flag clears when it is shown or one of its windows is
+  focused.
+- Moving a window to another workspace can follow it (`focus_moved_window`, or
+  per move).
+- Dim unfocused windows with a black overlay (`mu.config.dim.unfocused`), and
+  dim a window while one of its modal dialogs is open (`dim.modal`). The
+  pointer still reaches a dimmed window.
+- Make windows translucent the same way (`mu.config.opacity.focused`,
+  `unfocused` and `modal`). A faded window replaces the alpha its client asked
+  for.
+- Both effects take values from 0 to 1; the defaults leave windows unchanged.
+
+### Protocols
+- `keyboard-shortcuts-inhibit-v1`: VMs, remote desktops and games get
+  compositor keybindings while focused.
+- `xdg-dialog-v1`, so clients can mark dialogs modal.
+- `xdg-toplevel-tag-v1`: tags and descriptions, also when set before the
+  window maps, exposed to Lua.
+- `xdg-toplevel-icon-v1`, `alpha-modifier-v1`, `single-pixel-buffer-v1` and
+  `xdg-foreign` (v1 and v2).
+- Pointer gestures: touchpad pinch reaches clients.
+
+### Input
+- Two-finger scrolling on touchpads that support it.
+- Touchpad middle button emulation and disable-while-typing.
+- Cursor theme and size options. `XCURSOR_THEME` and `XCURSOR_SIZE` are set
+  for clients, and the cursor reloads when they change.
+
+### Packaging and session
+- `muwm.desktop` session entry and a portals configuration.
+- The session environment (`WAYLAND_DISPLAY`, `XDG_CURRENT_DESKTOP` and others)
+  is exported to D-Bus activation and systemd on startup.
+
+### Infrastructure
+- Build type and flags, and precompiled headers.
+- Less redundant work per frame and per event: cached border and window
+  sizes, throttled idle-notifier activity and fewer allocations on focus.
+
+### Fixes
+- Turning a laptop screen back on after undocking.
+- Natural scrolling applied only to touchpads, not to mice.
+- Spawned programs can be terminated: SIGINT, SIGTERM and SIGHUP are no longer
+  blocked in the child. SIGHUP also quits the compositor cleanly.
+
 ## 0.1.0
 
 ### Compositor
@@ -62,29 +146,20 @@
 - Settings can change at runtime and are reapplied to all devices.
 
 ### Lua configuration
-- `mu` global table. Options live in `mu.config`, set one by one
-  (`mu.config.gaps.size = 8`) or with a table (`mu.config { ... }`). Changes
-  take effect immediately; string colors such as `"#rrggbb"` work.
-- Windows, workspaces and outputs are objects with properties:
-  `mu.window` (focused), `mu.windows`, `mu.workspace`, `mu.workspaces`
-  (also by name), `mu.output`, `mu.outputs` (also by name). State is read and
-  assigned (`w.floating = true`, `w.workspace = "web"`, `w.fullscreen`,
-  `ws.master_ratio`, `out.workspace`); actions are methods (`w:close()`,
-  `ws:show()`, `out:neighbor("left")`). Objects keep working after the window
-  closes (`w.valid`).
-- `mu.bind` takes a key and a function or shell command, or a table of them.
-- `mu.rule(match, apply)` applies properties to new windows.
-- `mu.focus(where)` (a direction, `next` or `prev`), `mu.swap`,
-  `mu.focus_output`, `mu.move_to_output`, `mu.spawn`, `mu.reload`, `mu.quit`,
-  `mu.log`, `toggle_fullscreen` and `toggle_floating`.
-- `mu.after` and `mu.every` run functions on a timer; both return a timer with
-  `cancel()`.
-- Events: `mu.on` and `mu.once` return a listener with `off()`. Available
-  events are `startup`, `config.reload`, `window.open` and `window.close`.
-- `mu.config.new_client_position` sets where new windows go:
+- `mu` global table with `mu.opts` and functions such as `mu.keybind`,
+  `mu.spawn`, `mu.reload`, focus, swap, close and quit.
+- Workspace functions, `toggle_fullscreen` and `toggle_floating`.
+- `mu.focus(dir)` focuses the nearest window in a direction (`up`, `down`,
+  `left` or `right`), or the next output when there is none.
+- `mu.opts.new_client_position` sets where new windows go:
   `after_current`, `before_current`, `top` or `bottom`.
-- Config reload clears bindings, rules, handlers and timers. A failing config
-  falls back to the default bindings.
+- String colors such as `"#rrggbb"`.
+- Option changes take effect immediately.
+- Config reload clears duplicate bindings. A failing config falls back to the
+  default bindings.
+- Events: `mu.on`, `mu.once` and `mu.off`.
+  Available events are `startup`, `config_reload`, `window_open` and
+  `window_close`. The window events carry typed payloads.
 - A generated LuaLS stub for editor completion.
 
 ### Infrastructure
