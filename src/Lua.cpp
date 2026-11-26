@@ -2186,6 +2186,11 @@ MuWM::initLuaBindings()
         // is focused.
         boolField("raise_on_focus", &m_config.raise_on_focus),
 
+        // lua ---@field bell_sound string Sound for the terminal bell: a file
+        // played with pw-play, "default" for the bell of the freedesktop sound
+        // theme, or "" for none.
+        stringField("bell_sound", &m_config.bell_sound),
+
         // lua ---@field apply_tearing boolean Whether to apply tearing to
         // windows that request it.
         boolField("apply_tearing", &m_config.apply_tearing),

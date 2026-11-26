@@ -15,7 +15,10 @@
 #include <algorithm>
 #include <csignal>
 #include <cstring>
+#include <filesystem>
 #include <linux/input-event-codes.h>
+#include <spawn.h>
+#include <string_view>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -410,7 +413,9 @@ MuWM::init()
     wlr_presentation_create(m_display, m_backend, 2);
 
     wlr_alpha_modifier_v1_create(m_display);
-    // wlr_xdg_system_bell_v1_create(m_display, 1);
+    m_systemBell = wlr_xdg_system_bell_v1_create(m_display, 1);
+    m_bellRing.bind<&MuWM::onBellRing>(&m_systemBell->events.ring, this);
+
     m_tagManager = wlr_xdg_toplevel_tag_manager_v1_create(m_display, 1);
 
     m_toplevelTagSet.bind<&MuWM::onToplevelTagSet>(
@@ -3055,12 +3060,7 @@ MuWM::onActivationRequest(void *data)
     wlr_surface *focused = m_seat->keyboard_state.focused_surface;
     if (ev->token->surface && ev->token->surface != focused)
     {
-        if (target->workspace && target->workspace->handle)
-        {
-            target->workspace->urgent = true;
-            wlr_ext_workspace_handle_v1_set_urgent(target->workspace->handle,
-                                                   true);
-        }
+        markUrgent(target->workspace);
         return;
     }
 
@@ -3544,6 +3544,15 @@ MuWM::onSetIcon(void *data)
 }
 
 void
+MuWM::markUrgent(Workspace *ws)
+{
+    if (!ws || ws->urgent || !ws->handle)
+        return;
+    ws->urgent = true;
+    wlr_ext_workspace_handle_v1_set_urgent(ws->handle, true);
+}
+
+void
 MuWM::clearUrgent(Workspace *ws)
 {
     if (!ws || !ws->urgent || !ws->handle)
@@ -3717,4 +3726,107 @@ MuWM::onNewDialog(void *data)
     w->setModal.bind<&Dialog::onSetModal>(&dialog->events.set_modal, w);
     w->destroy.bind<&Dialog::onDestroy>(&dialog->events.destroy, w);
     scheduleApply(ChangeRecolor); // the dialog may already be modal
+}
+
+// The bell of the freedesktop sound theme, wherever the system keeps it: ""
+// if no sound theme is installed.
+static std::string
+defaultBellSound()
+{
+    namespace fs    = std::filesystem;
+    const char *rel = "sounds/freedesktop/stereo/bell.oga";
+
+    std::vector<fs::path> dirs;
+    if (const char *home = getenv("XDG_DATA_HOME"); home && *home)
+        dirs.emplace_back(home);
+    else if (const char *h = getenv("HOME"); h && *h)
+        dirs.emplace_back(fs::path(h) / ".local" / "share");
+
+    const char *xdg = getenv("XDG_DATA_DIRS");
+    const std::string_view list
+        = xdg && *xdg ? xdg : "/usr/local/share:/usr/share";
+    for (size_t pos = 0; pos <= list.size();)
+    {
+        size_t end = list.find(':', pos);
+        if (end == std::string_view::npos)
+            end = list.size();
+        if (end > pos)
+            dirs.emplace_back(list.substr(pos, end - pos));
+        pos = end + 1;
+    }
+
+    std::error_code ec;
+    for (const fs::path &d : dirs)
+        if (fs::exists(d / rel, ec))
+            return (d / rel).string();
+    return {};
+}
+
+void
+MuWM::playBellSound()
+{
+    // Resolve once per setting: "default" is the freedesktop bell, anything
+    // else is a path. A missing file is reported once, not on every bell.
+    if (!m_bellResolved || m_bellSetting != m_config.bell_sound)
+    {
+        m_bellResolved = true;
+        m_bellSetting  = m_config.bell_sound;
+        m_bellFile     = m_bellSetting == "default" ? defaultBellSound()
+                                                    : m_bellSetting;
+
+        std::error_code ec;
+        if (!m_bellFile.empty() && !std::filesystem::exists(m_bellFile, ec))
+        {
+            wlr_log(WLR_ERROR, "bell_sound: '%s' does not exist",
+                    m_bellFile.c_str());
+            m_bellFile.clear();
+        }
+    }
+    if (m_bellFile.empty())
+        return;
+
+    // A program can ring the bell in a loop; don't start a process for each.
+    timespec now;
+    clock_gettime(CLOCK_MONOTONIC_COARSE, &now);
+    const int64_t ms = int64_t(now.tv_sec) * 1000 + now.tv_nsec / 1'000'000;
+    if (ms - m_lastBellMs < 200)
+        return;
+    m_lastBellMs = ms;
+
+    // The path is a positional argument, so it is never parsed as shell. The
+    // shell backgrounds pw-play and exits at once, which we reap here, so the
+    // sound is adopted by init and never becomes a zombie. The signal mask is
+    // reset because the event loop blocks SIGINT/SIGTERM/SIGHUP.
+    posix_spawnattr_t attr;
+    posix_spawnattr_init(&attr);
+    sigset_t none;
+    sigemptyset(&none);
+    posix_spawnattr_setsigmask(&attr, &none);
+    posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETSIGMASK);
+
+    char *argv[] = {const_cast<char *>("sh"), const_cast<char *>("-c"),
+                    const_cast<char *>("pw-play \"$1\" &"),
+                    const_cast<char *>("sh"),
+                    const_cast<char *>(m_bellFile.c_str()), nullptr};
+    pid_t pid;
+    if (posix_spawn(&pid, "/bin/sh", nullptr, &attr, argv, environ) == 0)
+        waitpid(pid, nullptr, 0);
+    posix_spawnattr_destroy(&attr);
+}
+
+void
+MuWM::onBellRing(void *data)
+{
+    auto *ev = static_cast<wlr_xdg_system_bell_v1_ring_event *>(data);
+
+    Toplevel *t = toplevelFromSurface(ev->surface);
+    if (t && t->workspace)
+    {
+        const Workspace *ws = t->workspace;
+        const bool visible  = ws->output && ws->output->workspace == ws;
+        if (!visible)
+            markUrgent(t->workspace);
+    }
+
+    playBellSound();
 }

@@ -137,6 +137,7 @@
 ---@field focus_moved_window boolean Whether moving a window to another workspace also switches to that workspace and focuses the window. Calls can override it per move.
 ---@field focus_follows_mouse boolean Whether to focus a window when the mouse enters it.
 ---@field raise_on_focus boolean Whether to raise a window when it is focused.
+---@field bell_sound string Sound for the terminal bell: a file played with pw-play, "default" for the bell of the freedesktop sound theme, or "" for none.
 ---@field apply_tearing boolean Whether to apply tearing to windows that request it.
 
 ---@class mu

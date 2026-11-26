@@ -21,6 +21,7 @@ struct Config
     bool focus_follows_mouse = true;
     bool mouse_follows_focus = false;
     bool raise_on_focus      = false;
+    std::string bell_sound   = "default";
     bool apply_tearing       = false;
     bool dynamic_workspaces  = true;
     bool focus_moved_window  = false; // follow a window moved to a workspace

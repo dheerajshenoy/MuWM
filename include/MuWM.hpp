@@ -258,6 +258,7 @@ private:
     void onNewDialog(void *data);
     void onToplevelTagSet(void *data);
     void onToplevelTagDescriptionSet(void *data);
+    void onBellRing(void *data);
 
     void updateConstraint(wlr_surface *focus);
     void deactivateConstraint();
@@ -286,7 +287,9 @@ private:
     void applyCursor();
     Toplevel *nextToplevel(wlr_direction dir);
     void clearUrgent(Workspace *ws);
+    void markUrgent(Workspace *ws);
     void updateWorkspaceHidden(Workspace *ws);
+    void playBellSound();
 
 private:
     bool m_ok           = false;
@@ -339,6 +342,7 @@ private:
     wlr_keyboard_shortcuts_inhibit_manager_v1 *m_shortcutInhibitManager
         = nullptr;
     wlr_xdg_wm_dialog_v1 *m_dialogManager = nullptr;
+    wlr_xdg_system_bell_v1 *m_systemBell = nullptr;
 
     Output *m_focusedOutput = nullptr;
     std::vector<Output *> m_outputs;
@@ -389,6 +393,7 @@ private:
     Listener<MuWM> m_toplevelTagSet;
     Listener<MuWM> m_toplevelTagDescriptionSet;
     Listener<MuWM> m_newDialog;
+    Listener<MuWM> m_bellRing;
 
     // Super+drag: left button moves a window, right button resizes it.
     enum class Grab
@@ -441,4 +446,8 @@ private:
         = 0; // incremented for each new toplevel, used to identify it in events
 
     int64_t m_lastActivityMs = -1'000'000;
+    int64_t m_lastBellMs     = -1'000'000;
+    std::string m_bellSetting; // the bell_sound value m_bellFile came from
+    std::string m_bellFile;    // resolved sound file; empty means silent
+    bool m_bellResolved = false;
 };
