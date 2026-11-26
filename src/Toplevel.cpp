@@ -166,6 +166,9 @@ Toplevel::resizeBorders(int w, int h)
     wlr_scene_node_set_position(&border[2]->node, -b, 0);
     wlr_scene_rect_set_size(border[3], b, h);
     wlr_scene_node_set_position(&border[3]->node, w, 0);
+
+    if (dim)
+        wlr_scene_rect_set_size(dim, w, h);
 }
 
 void
@@ -178,10 +181,12 @@ Toplevel::setBordersVisible(bool visible)
 void
 Toplevel::setFocused(bool focused)
 {
+    this->focused = focused;
     for (auto *r : border)
         wlr_scene_rect_set_color(r, focused
                                         ? wm->config().border.focused_color
                                         : wm->config().border.unfocused_color);
+    updateDim();
 }
 
 wlr_surface *
@@ -468,4 +473,24 @@ Toplevel::destroyWlrHandle()
     requestClose.unbind();
     wlr_foreign_toplevel_handle_v1_destroy(wlrHandle);
     wlrHandle = nullptr;
+}
+
+// The overlay is created on first use, so both window kinds (xdg and X11)
+// get it without touching their creation code.
+void
+Toplevel::updateDim()
+{
+    if (!dim)
+    {
+        const float none[4] = {0, 0, 0, 0};
+        dim                 = wlr_scene_rect_create(tree, 1, 1, none);
+        dim->node.data      = this;
+    }
+
+    const auto &cfg      = wm->config().dim;
+    const float color[4] = {0, 0, 0, cfg.factor};
+    wlr_scene_rect_set_color(dim, color);
+    wlr_scene_rect_set_size(dim, borderW > 0 ? borderW : 1,
+                            borderH > 0 ? borderH : 1);
+    wlr_scene_node_set_enabled(&dim->node, cfg.unfocused && !focused);
 }

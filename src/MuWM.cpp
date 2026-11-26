@@ -1309,6 +1309,17 @@ MuWM::toplevelAt(double x, double y, wlr_surface **surface, double *sx,
                  double *sy)
 {
     wlr_scene_node *node = wlr_scene_node_at(&m_scene->tree.node, x, y, sx, sy);
+
+    // A dim overlay covers the window; look through it. Border rects have no
+    // data, so only overlays match.
+    if (node && node->type == WLR_SCENE_NODE_RECT && node->data)
+    {
+        wlr_scene_node *overlay = node;
+        wlr_scene_node_set_enabled(overlay, false);
+        node = wlr_scene_node_at(&m_scene->tree.node, x, y, sx, sy);
+        wlr_scene_node_set_enabled(overlay, true);
+    }
+
     if (!node || node->type != WLR_SCENE_NODE_BUFFER)
         return nullptr;
 

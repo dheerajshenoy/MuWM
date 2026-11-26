@@ -113,6 +113,16 @@
 ---@field disable_while_typing? boolean Whether to disable the touchpad while typing.
 ---@field middle_emulation? boolean Whether to enable middle button emulation on the touchpad.
 
+---@class mu.config.dim
+---@field unfocused? boolean Whether to dim inactive windows.
+---@field modal? boolean Whether to dim inactive windows only when a modal window is open.
+---@field factor? number The dimming factor for inactive windows, between 0 and 1.
+
+---@class mu.config.opacity
+---@field unfocused? boolean Whether to make inactive windows transparent.
+---@field modal? boolean Whether to make inactive windows transparent only when a modal window is open.
+---@field factor? number The opacity factor for inactive windows, between 0 and 1.
+
 ---@class mu.config
 ---@field keyboard mu.config.keyboard Keyboard layout options.
 ---@field touchpad mu.config.touchpad Touchpad options.
@@ -121,6 +131,8 @@
 ---@field cursor mu.config.cursor Cursor options.
 ---@field layout mu.config.layout Layout options.
 ---@field new_client_position mu.NewClientPosition Where a new window is inserted in the layout.
+---@field dim mu.config.dim Dimming options.
+---@field opacity mu.config.opacity Opacity options.
 ---@field workspaces string[] Workspace names; their number is the workspace count.
 ---@field dynamic_workspaces boolean Whether to create and destroy workspaces on demand, instead of using the fixed list in mu.config.workspaces.
 ---@field focus_moved_window boolean Whether moving a window to another workspace also switches to that workspace and focuses the window. Calls can override it per move.

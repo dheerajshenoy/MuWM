@@ -22,8 +22,8 @@ struct Config
     bool mouse_follows_focus = false;
     bool raise_on_focus      = false;
     bool apply_tearing       = false;
-    bool dynamic_workspaces = true;
-    bool focus_moved_window = false; // follow a window moved to a workspace
+    bool dynamic_workspaces  = true;
+    bool focus_moved_window  = false; // follow a window moved to a workspace
 
     std::vector<std::string> workspaces
         = {"1", "2", "3", "4", "5", "6", "7", "8", "9"};
@@ -68,4 +68,18 @@ struct Config
     {
         float master_ratio = 0.55f;
     } layout;
+
+    struct Dim
+    {
+        bool unfocused = false;
+        bool modal     = true;
+        float factor = 0.5f;
+    } dim;
+
+    struct Opacity
+    {
+        bool unfocused = false;
+        bool modal     = true;
+        float factor   = 0.5f;
+    } opacity;
 };

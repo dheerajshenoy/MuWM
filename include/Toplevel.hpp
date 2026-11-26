@@ -13,10 +13,12 @@ struct Toplevel
     MuWM *wm                       = nullptr;
     wlr_xdg_toplevel *xdg          = nullptr;
     wlr_xwayland_surface *xsurface = nullptr; // for XWayland windows
-    wlr_scene_tree *tree           = nullptr; // container: surface + borders
-    wlr_scene_tree *surfaceTree    = nullptr; // just the client's surfaces
-    wlr_scene_rect *border[4]      = {};      // top, bottom, left, right
-    wlr_box floatBox               = {};
+    wlr_scene_rect *dim  = nullptr; // black overlay; node.data is this window
+    wlr_scene_tree *tree = nullptr; // container: surface + borders
+    wlr_scene_tree *surfaceTree = nullptr; // just the client's surfaces
+    wlr_scene_rect *border[4]   = {};      // top, bottom, left, right
+    wlr_box floatBox
+        = {}; // the window area, including borders, in output coordinates
     wlr_foreign_toplevel_handle_v1 *wlrHandle = nullptr; // while mapped
     wlr_xdg_toplevel_icon_v1 *icon            = nullptr; // referenced
     std::string tag;            // set by the client via xdg-toplevel-tag
@@ -33,12 +35,12 @@ struct Toplevel
     Listener<Toplevel> associate;        // X11: the window got a wl_surface
     Listener<Toplevel> dissociate;       // X11: the wl_surface is going away
     Listener<Toplevel> requestConfigure; // X11: the client wants a geometry
-
     wlr_ext_foreign_toplevel_handle_v1 *foreignHandle = nullptr; // while mapped
     Workspace *workspace                              = nullptr;
     uint64_t id                                       = 0;
     bool fullscreen                                   = false;
     bool floating                                     = false;
+    bool focused                                      = false;
     wlr_box slot = {}; // size the layout asked for; the borders never exceed it
 
     // The size limits seen at the last commit, to notice when a client changes
@@ -70,6 +72,7 @@ struct Toplevel
     void onRequestClose(void *data);
 
     void setFocused(bool focused);
+    void updateDim();
     void resizeBorders(int w, int h);
     void setBordersVisible(bool visible);
 

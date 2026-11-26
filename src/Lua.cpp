@@ -1972,7 +1972,8 @@ MuWM::initLuaBindings()
     // The proxies keep raw pointers to these, so they must outlive this
     // function (locals would dangle as soon as it returned).
     static Group rootGroup, configGroup, borderGroup, keyboardGroup,
-        touchpadGroup, gapsGroup, layoutGroup, cursorGroup;
+        touchpadGroup, gapsGroup, layoutGroup, cursorGroup, dimGroup,
+        opacityGroup;
 
     registerHandle<WindowKind>(m_lua);
     registerHandle<WorkspaceKind>(m_lua);
@@ -2097,6 +2098,38 @@ MuWM::initLuaBindings()
                   MuWM::ChangePointer),
     };
 
+    // lua ---@class mu.config.dim
+    dimGroup.fields = {
+        // lua ---@field unfocused? boolean Whether to dim inactive windows.
+        boolField("unfocused", &m_config.dim.unfocused, MuWM::ChangeRecolor),
+
+        // lua ---@field modal? boolean Whether to dim inactive windows only
+        // when a modal window is open.
+        boolField("modal", &m_config.dim.modal, MuWM::ChangeRecolor),
+
+        // lua ---@field factor? number The dimming factor for inactive windows,
+        // between 0 and 1.
+        floatField("factor", &m_config.dim.factor, MuWM::ChangeRecolor, 0.0f,
+                   1.0f),
+    };
+
+    // lua ---@class mu.config.opacity
+    opacityGroup.fields = {
+        // lua ---@field unfocused? boolean Whether to make inactive windows
+        // transparent.
+        boolField("unfocused", &m_config.opacity.unfocused,
+                  MuWM::ChangeRecolor),
+
+        // lua ---@field modal? boolean Whether to make inactive windows
+        // transparent only when a modal window is open.
+        boolField("modal", &m_config.opacity.modal, MuWM::ChangeRecolor),
+
+        // lua ---@field factor? number The opacity factor for inactive windows,
+        // between 0 and 1.
+        floatField("factor", &m_config.opacity.factor, MuWM::ChangeRecolor,
+                   0.0f, 1.0f),
+    };
+
     // clang-format off
     // lua ---@class mu.config
     configGroup.fields = {
@@ -2122,6 +2155,12 @@ MuWM::initLuaBindings()
         // window is inserted in the layout.
         enumField("new_client_position", &m_config.new_client_position,
                   &kNewClientPositionNames, MuWM::ChangeLayout),
+
+        // lua ---@field dim mu.config.dim Dimming options.
+        subField("dim", &dimGroup),
+
+        // lua ---@field opacity mu.config.opacity Opacity options.
+        subField("opacity", &opacityGroup),
 
         // lua ---@field workspaces string[] Workspace names; their number is the
         // workspace count.
