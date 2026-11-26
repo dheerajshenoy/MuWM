@@ -2029,6 +2029,11 @@ MuWM::initLuaBindings()
         // lua ---@field unfocused? mu.Color Border color for unfocused windows.
         colorField("unfocused", bd.unfocused_color, MuWM::ChangeRecolor),
 
+        // lua ---@field sticky? mu.Color Border color of the bottom and right
+        // edges of a sticky window. The top and left edges keep showing the
+        // focus.
+        colorField("sticky", bd.sticky_color, MuWM::ChangeRecolor),
+
         // lua ---@field smart? boolean Whether to hide borders when only one
         // window is visible.
         boolField("smart", &bd.smart, MuWM::ChangeLayout),

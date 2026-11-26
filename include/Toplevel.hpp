@@ -74,6 +74,7 @@ struct Toplevel
     void onRequestClose(void *data);
 
     void setFocused(bool focused);
+    void updateBorder();
     void updateDim();
     void updateOpacity();
     void resizeBorders(int w, int h);

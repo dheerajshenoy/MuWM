@@ -46,6 +46,7 @@ struct Config
         int width                = 2;
         float focused_color[4]   = {0.0f, 0.5f, 1.0f, 1.0f};
         float unfocused_color[4] = {0.5f, 0.5f, 0.5f, 1.0f};
+        float sticky_color[4]    = {0.75f, 0.45f, 1.0f, 1.0f};
         bool smart               = true;
         bool fullscreen          = false;
     } border;

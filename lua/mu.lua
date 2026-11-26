@@ -89,6 +89,7 @@
 ---@field width? integer Border width in pixels. Must be between 0 and 1000.
 ---@field focused? mu.Color Border color for the focused window.
 ---@field unfocused? mu.Color Border color for unfocused windows.
+---@field sticky? mu.Color Border color of the bottom and right edges of a sticky window. The top and left edges keep showing the focus.
 ---@field smart? boolean Whether to hide borders when only one window is visible.
 ---@field fullscreen? boolean Whether to draw a border around fullscreen windows.
 

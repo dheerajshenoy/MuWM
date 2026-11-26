@@ -215,12 +215,25 @@ void
 Toplevel::setFocused(bool focused)
 {
     this->focused = focused;
-    for (auto *r : border)
-        wlr_scene_rect_set_color(r, focused
-                                        ? wm->config().border.focused_color
-                                        : wm->config().border.unfocused_color);
+    updateBorder();
     updateDim();
     updateOpacity();
+}
+
+// The top and left edges show whether the window has focus. A sticky window
+// shows that on its bottom and right edges, so it can be told apart without
+// hiding the focus.
+void
+Toplevel::updateBorder()
+{
+    const auto &bd     = wm->config().border;
+    const float *state = focused ? bd.focused_color : bd.unfocused_color;
+    const float *other = sticky ? bd.sticky_color : state;
+
+    wlr_scene_rect_set_color(border[0], state); // top
+    wlr_scene_rect_set_color(border[1], other); // bottom
+    wlr_scene_rect_set_color(border[2], state); // left
+    wlr_scene_rect_set_color(border[3], other); // right
 }
 
 wlr_surface *

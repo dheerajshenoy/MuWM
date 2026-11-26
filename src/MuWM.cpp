@@ -4001,4 +4001,5 @@ MuWM::setSticky(Toplevel *t, bool sticky)
     }
 
     t->sticky = sticky;
+    t->updateBorder();
 }
