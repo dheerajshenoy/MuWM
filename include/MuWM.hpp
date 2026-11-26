@@ -3,7 +3,9 @@
 #include "Binding.hpp"
 #include "Config.hpp"
 #include "EventBus.hpp"
+#include "GestureBinding.hpp"
 #include "Listener.hpp"
+#include "SwipeState.hpp"
 #include "Toplevel.hpp"
 #include "Workspace.hpp"
 #include "argparse.hpp"
@@ -469,19 +471,7 @@ private:
     std::string m_bellFile;    // resolved sound file; empty means silent
     bool m_bellResolved = false;
 
-    struct GestureBinding
-    {
-        int fingers       = 0;
-        wlr_direction dir = WLR_DIRECTION_LEFT;
-        int ref           = LUA_NOREF; // Lua callback, if any
-        std::function<void()> native;  // built-in action
-    };
     std::vector<GestureBinding> m_gestures;
 
-    struct SwipeState
-    {
-        bool consumed = false, fired = false;
-        uint32_t fingers = 0;
-        double dx = 0, dy = 0;
-    } m_swipe;
+    SwipeState m_swipe;
 };
