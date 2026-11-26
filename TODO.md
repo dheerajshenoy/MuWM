@@ -2,7 +2,6 @@
 
 Tiling Wayland compositor in C++ on wlroots (CMake).
 
-- [ ] sticky windows
 - [ ] Window capture of windows on hidden workspaces (their scene node is disabled, so the frame is blank)
 - [ ] pointer-gestures: touchpad pinch and swipe in clients; swipe to switch workspace
 - [ ] IPC / control socket (`muwm-msg`) for scripting and bars that need layout and focus info
