@@ -240,7 +240,12 @@ MuWM::init()
         return false;
     }
 
+#ifdef MUWM_HAS_SCENEFX
+    m_renderer = fx_renderer_create(m_backend);
+#else
     m_renderer = wlr_renderer_autocreate(m_backend);
+#endif
+
     if (!m_renderer)
     {
         wlr_log(WLR_ERROR, "Failed to create renderer");
@@ -4032,11 +4037,11 @@ MuWM::onSwipeBegin(void *data)
     // Decide now, because a client has to see a swipe from begin to end. A
     // swipe with a finger count we have an action for is ours, unless the
     // session is locked.
-    m_swipe          = {};
-    m_swipe.fingers  = ev->fingers;
-    m_swipe.consumed = !m_locked
-                       && std::ranges::any_of(m_gestures,
-                                              [&](const GestureBinding &g)
+    m_swipe         = {};
+    m_swipe.fingers = ev->fingers;
+    m_swipe.consumed
+        = !m_locked
+          && std::ranges::any_of(m_gestures, [&](const GestureBinding &g)
     { return g.fingers == static_cast<int>(ev->fingers); });
     if (m_swipe.consumed)
         return;

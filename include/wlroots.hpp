@@ -5,6 +5,15 @@ extern "C"
 {
 #include <wayland-server-core.h>
 #define static // makes `float c[static 4]` legal in C++
+
+#ifdef MUWM_HAS_SCENEFX
+    #include <scenefx/render/fx_renderer/fx_renderer.h>
+    #include <scenefx/types/fx/blur_data.h>
+    #include <scenefx/types/fx/clipped_region.h>
+    #include <scenefx/types/wlr_scene.h>
+#else
+    #include <wlr/types/wlr_scene.h>
+#endif
 #include <wlr/backend.h>
 #include <wlr/render/allocator.h>
 #include <wlr/render/wlr_renderer.h>
@@ -20,6 +29,7 @@ extern "C"
 #undef namespace
 #include <wlr/backend/libinput.h>
 #include <wlr/backend/session.h>
+#include <wlr/types/wlr_alpha_modifier_v1.h>
 #include <wlr/types/wlr_content_type_v1.h>
 #include <wlr/types/wlr_cursor_shape_v1.h>
 #include <wlr/types/wlr_data_control_v1.h>
@@ -46,7 +56,6 @@ extern "C"
 #include <wlr/types/wlr_primary_selection.h>
 #include <wlr/types/wlr_primary_selection_v1.h>
 #include <wlr/types/wlr_relative_pointer_v1.h>
-#include <wlr/types/wlr_scene.h>
 #include <wlr/types/wlr_screencopy_v1.h>
 #include <wlr/types/wlr_seat.h>
 #include <wlr/types/wlr_security_context_v1.h>
@@ -65,9 +74,8 @@ extern "C"
 #include <wlr/types/wlr_xdg_foreign_v2.h>
 #include <wlr/types/wlr_xdg_output_v1.h>
 #include <wlr/types/wlr_xdg_shell.h>
-#include <wlr/types/wlr_xdg_toplevel_icon_v1.h>
 #include <wlr/types/wlr_xdg_system_bell_v1.h>
-#include <wlr/types/wlr_alpha_modifier_v1.h>
+#include <wlr/types/wlr_xdg_toplevel_icon_v1.h>
 #include <wlr/types/wlr_xdg_toplevel_tag_v1.h>
 #include <wlr/util/log.h>
 #include <wlr/util/region.h>

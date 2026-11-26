@@ -5,11 +5,13 @@ set(CMAKE_CXX_STANDARD 26)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+
 # Plain `cmake -B build` would otherwise build with no optimization at all.
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
 endif()
 
+option(WANT_SCENEFX "Build with SceneFX support" OFF)
 option(MUWM_SANITIZE "Build with AddressSanitizer and UBSan" OFF)
 
 find_package(PkgConfig REQUIRED)
@@ -21,14 +23,13 @@ pkg_check_modules(DEPS REQUIRED IMPORTED_TARGET
     libinput
 )
 
+if (WANT_SCENEFX)
+    pkg_check_modules(SCENEFX REQUIRED IMPORTED_TARGET scenefx-0.5)
+endif()
+
 find_package(Lua REQUIRED)
 
 # --- Wayland protocols -------------------------------------------------------
-# wlroots headers include "<name>-protocol.h" but don't ship it, so generate
-# the server headers with wayland-scanner. Link `muwm_protocols` to get both
-# the generated headers (built before anything that needs them) and their
-# include directory.
-
 pkg_check_modules(WAYLAND_PROTOCOLS REQUIRED wayland-protocols)
 pkg_get_variable(WAYLAND_PROTOCOLS_DIR wayland-protocols pkgdatadir)
 pkg_check_modules(XCB REQUIRED xcb)
@@ -58,7 +59,7 @@ endfunction()
 
 add_protocol(${WAYLAND_PROTOCOLS_DIR}/stable/xdg-shell/xdg-shell.xml)
 add_protocol(${WAYLAND_PROTOCOLS_DIR}/unstable/xdg-decoration/xdg-decoration-unstable-v1.xml)
-# add_protocol(${WAYLAND_PROTOCOLS_DIR}/staging/ext-image-copy-capture/ext-image-copy-capture-unstable-v1.xml)
+
 # Not part of wayland-protocols; vendored from wlr-protocols.
 add_protocol(${CMAKE_CURRENT_SOURCE_DIR}/protocols/wlr-layer-shell-unstable-v1.xml)
 add_protocol(${CMAKE_CURRENT_SOURCE_DIR}/protocols/wlr-output-power-management-unstable-v1.xml)
@@ -90,6 +91,13 @@ target_include_directories(${PROJECT_NAME} PRIVATE
     ${LUA_INCLUDE_DIR}
 )
 
+# scenefx replaces wlroots' scene-graph and exports the same wlr_scene_*
+# symbols with larger structs. It has to come first in the link line, or
+# wlroots' versions win and the two libraries corrupt each other's memory.
+if (WANT_SCENEFX)
+    target_link_libraries(${PROJECT_NAME} PRIVATE PkgConfig::SCENEFX)
+endif()
+
 target_link_libraries(${PROJECT_NAME} PRIVATE
     PkgConfig::DEPS
     ${LUA_LIBRARIES}
@@ -102,6 +110,12 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
     PROJECT_NAME="${PROJECT_NAME}"
     PROJECT_VERSION="${PROJECT_VERSION}"
 )
+
+
+if (WANT_SCENEFX)
+    target_compile_definitions(${PROJECT_NAME} PRIVATE MUWM_HAS_SCENEFX)
+endif()
+
 
 target_compile_options(${PROJECT_NAME} PRIVATE
     -Wall -Wextra

@@ -1356,12 +1356,13 @@ void
 gestureOne(lua_State *L, int spec, int action)
 {
     if (lua_type(L, spec) != LUA_TSTRING)
-        luaL_error(L, "mu.gesture: swipes must be strings like \"swipe3+left\"");
+        luaL_error(L,
+                   "mu.gesture: swipes must be strings like \"swipe3+left\"");
     if (lua_type(L, action) != LUA_TFUNCTION
         && lua_type(L, action) != LUA_TSTRING)
         luaL_error(L, "mu.gesture: the action must be a function or a command");
 
-    const char *s = lua_tostring(L, spec);
+    const char *s     = lua_tostring(L, spec);
     const auto parsed = parseGesture(s);
     if (!parsed)
         luaL_error(L,
@@ -2258,7 +2259,8 @@ MuWM::initLuaBindings()
 
     // lua ---@class mu.config.gestures
     gesturesGroup.fields = {
-        // lua ---@field swipe_threshold? number How far the fingers have to move
+        // lua ---@field swipe_threshold? number How far the fingers have to
+        // move
         // before a swipe bound with mu.gesture counts, in touchpad units. Must
         // be between 1 and 10000.
         floatField("swipe_threshold", &m_config.gestures.swipe_threshold,

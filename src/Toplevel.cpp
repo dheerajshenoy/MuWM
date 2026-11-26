@@ -573,3 +573,12 @@ Toplevel::hasModalChild() const
     }
     return false;
 }
+
+#ifdef MUWM_HAS_SCENEFX
+static void
+applyRadius(wlr_scene_buffer *buffer, int, int, void *data)
+{
+    wlr_scene_buffer_set_corner_radius(buffer, *static_cast<int *>(data));
+}
+#endif
+
