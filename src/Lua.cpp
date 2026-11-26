@@ -526,7 +526,6 @@ parseBinding(std::string_view s)
     }
 }
 
-
 // ---------------------------------------------------------------------------
 // Handles: windows, workspaces and outputs as Lua objects.
 //
@@ -619,8 +618,8 @@ outputArg(lua_State *L, int idx)
     MuWM *wm = wmFrom(L);
     if (lua_type(L, idx) == LUA_TSTRING)
         return wm->outputByName(lua_tostring(L, idx));
-    if (auto *h = static_cast<OutputHandle *>(
-            luaL_testudata(L, idx, "mu.output")))
+    if (auto *h
+        = static_cast<OutputHandle *>(luaL_testudata(L, idx, "mu.output")))
         return wm->outputByName(h->name);
     luaL_error(L, "expected an output or an output name");
     return nullptr;
@@ -638,7 +637,8 @@ workspaceArg(lua_State *L, int idx, Output *context)
     if (lua_type(L, idx) == LUA_TNUMBER)
     {
         const lua_Integer n = luaL_checkinteger(L, idx);
-        const auto count    = static_cast<lua_Integer>(wm->config().workspaces.size());
+        const auto count
+            = static_cast<lua_Integer>(wm->config().workspaces.size());
         if (!context || n < 1 || n > count)
             return nullptr;
         return wm->workspaceAt(context, static_cast<size_t>(n - 1));
@@ -682,7 +682,7 @@ windowMoveToWorkspace(lua_State *L)
     MuWM *wm    = wmFrom(L);
     Output *ctx
         = t && t->workspace ? t->workspace->output : wm->focusedOutput();
-    Workspace *ws                = workspaceArg(L, 2, ctx);
+    Workspace *ws               = workspaceArg(L, 2, ctx);
     const MuWM::MoveFocus focus = optBool(L, 3);
     if (t && ws)
         wm->windowToWorkspace(t, ws, focus);
@@ -795,6 +795,16 @@ const WindowProp kWindowProps[] = {
          return 0;
      }},
     {"move_to_workspace", nullptr, nullptr, windowMoveToWorkspace},
+    {"tag",
+        [](lua_State *L, MuWM *, const WindowInfo &i, bool)
+        {
+            lua_pushstring(L, i.tag.c_str());
+        }, nullptr, nullptr},
+    {"tag_description",
+        [](lua_State *L, MuWM *, const WindowInfo &i, bool)
+        {
+            lua_pushstring(L, i.tagDescription.c_str());
+        }, nullptr, nullptr},
 };
 
 const WorkspaceProp kWorkspaceProps[] = {
@@ -942,9 +952,9 @@ const OutputProp kOutputProps[] = {
 // What the shared metamethods need to know about each kind of handle.
 struct WindowKind
 {
-    using Handle = WindowHandle;
-    using Info   = WindowInfo;
-    using Obj    = Toplevel;
+    using Handle                    = WindowHandle;
+    using Info                      = WindowInfo;
+    using Obj                       = Toplevel;
     static constexpr const char *mt = "mu.window";
     static const WindowProp *find(const char *key)
     {
@@ -970,9 +980,9 @@ struct WindowKind
 
 struct WorkspaceKind
 {
-    using Handle = WorkspaceHandle;
-    using Info   = WorkspaceInfo;
-    using Obj    = Workspace;
+    using Handle                    = WorkspaceHandle;
+    using Info                      = WorkspaceInfo;
+    using Obj                       = Workspace;
     static constexpr const char *mt = "mu.workspace";
     static const WorkspaceProp *find(const char *key)
     {
@@ -998,9 +1008,9 @@ struct WorkspaceKind
 
 struct OutputKind
 {
-    using Handle = OutputHandle;
-    using Info   = OutputInfo;
-    using Obj    = Output;
+    using Handle                    = OutputHandle;
+    using Info                      = OutputInfo;
+    using Obj                       = Output;
     static constexpr const char *mt = "mu.output";
     static const OutputProp *find(const char *key)
     {
@@ -1028,7 +1038,7 @@ template <class K>
 int
 handleIndex(lua_State *L)
 {
-    auto *h         = static_cast<typename K::Handle *>(luaL_checkudata(L, 1, K::mt));
+    auto *h = static_cast<typename K::Handle *>(luaL_checkudata(L, 1, K::mt));
     const char *key = luaL_checkstring(L, 2);
     const auto *p   = K::find(key);
     if (!p)
@@ -1039,8 +1049,8 @@ handleIndex(lua_State *L)
         return 1;
     }
 
-    MuWM *wm  = wmFrom(L);
-    auto *obj = K::resolve(wm, *h);
+    MuWM *wm              = wmFrom(L);
+    auto *obj             = K::resolve(wm, *h);
     typename K::Info info = obj ? K::info(wm, obj) : h->snap;
     p->get(L, wm, info, obj != nullptr);
     return 1;
@@ -1050,7 +1060,7 @@ template <class K>
 int
 handleNewIndex(lua_State *L)
 {
-    auto *h         = static_cast<typename K::Handle *>(luaL_checkudata(L, 1, K::mt));
+    auto *h = static_cast<typename K::Handle *>(luaL_checkudata(L, 1, K::mt));
     const char *key = luaL_checkstring(L, 2);
     const auto *p   = K::find(key);
     if (!p)
@@ -1079,8 +1089,8 @@ template <class K>
 int
 handleToString(lua_State *L)
 {
-    K::describe(L,
-                *static_cast<typename K::Handle *>(luaL_checkudata(L, 1, K::mt)));
+    K::describe(
+        L, *static_cast<typename K::Handle *>(luaL_checkudata(L, 1, K::mt)));
     return 1;
 }
 
@@ -1098,12 +1108,9 @@ void
 registerHandle(lua_State *L)
 {
     const luaL_Reg metamethods[] = {
-        {"__index", handleIndex<K>},
-        {"__newindex", handleNewIndex<K>},
-        {"__eq", handleEq<K>},
-        {"__tostring", handleToString<K>},
-        {"__gc", handleGc<K>},
-        {nullptr, nullptr},
+        {"__index", handleIndex<K>}, {"__newindex", handleNewIndex<K>},
+        {"__eq", handleEq<K>},       {"__tostring", handleToString<K>},
+        {"__gc", handleGc<K>},       {nullptr, nullptr},
     };
     luaL_newmetatable(L, K::mt);
     luaL_setfuncs(L, metamethods, 0);
@@ -1249,7 +1256,7 @@ bindOne(lua_State *L, int spec, int action)
         && lua_type(L, action) != LUA_TSTRING)
         luaL_error(L, "mu.bind: the action must be a function or a command");
 
-    const char *s                  = lua_tostring(L, spec);
+    const char *s                 = lua_tostring(L, spec);
     std::optional<Binding> parsed = parseBinding(s);
     if (!parsed)
         luaL_error(L, "invalid key binding '%s'", s);
@@ -1345,7 +1352,8 @@ luaSwap(lua_State *L)
     else if (!std::strcmp(w, "master"))
         wm->swapMaster();
     else
-        return luaL_error(L, "mu.swap expects \"next\", \"prev\" or \"master\"");
+        return luaL_error(L,
+                          "mu.swap expects \"next\", \"prev\" or \"master\"");
     return 0;
 }
 
@@ -1426,9 +1434,13 @@ struct LuaRef
   ---Names accepted by mu.on and mu.once.
   ---@alias mu.Event
   ---| "startup" # The compositor is up (fires once, not on reload).
+  ---| "quit" # The compositor is quitting (fires once, not on reload).
   ---| "config.reload" # The config was reloaded successfully.
   ---| "window.open" # A window appeared; its handler gets the window.
   ---| "window.close" # A window went away; its handler gets the (now invalid) window.
+  ---| "window.fullscreen" # A window changed its fullscreen state; its handler gets the window.
+  ---| "workspace.change" # The focused workspace changed; its handler gets the new workspace
+
 
   ---A window. A handle: it stays usable for as long as the window exists, and
   ---afterwards reads give the last known values (see valid) while writes do
@@ -1450,6 +1462,8 @@ struct LuaRef
   ---@field close fun(self: mu.Window) Ask the window to close; does nothing if it is gone.
   ---@field focus fun(self: mu.Window) Focus the window, switching to its workspace first.
   ---@field move_to_workspace fun(self: mu.Window, workspace: mu.Workspace|integer|string, focus?: boolean) Move the window to a workspace. With focus, switch to that workspace and focus the window; without it the window stays where it is on screen. Defaults to mu.config.focus_moved_window.
+  ---@field tag string The window's tag, or "" if none.
+  ---@field tag_description string The window's tag description, or "" if none.
 
   ---A workspace of one output, e.g. "3". A handle like mu.Window.
   ---@class mu.Workspace
@@ -1498,18 +1512,19 @@ struct EventName
 
 constexpr EventName kEventNames[] = {
     {"startup", EventType::Startup},
+    {"quit", EventType::Quit},
     {"config.reload", EventType::ConfigReload},
     {"window.open", EventType::WindowOpen},
     {"window.close", EventType::WindowClose},
+    {"window.fullscreen", EventType::WindowFullscreen},
+    {"workspace.change", EventType::WorkspaceChange},
     // TODO: Add the rest
-    // {"window.fullscreen", EventType::WindowFullscreen},
     // {"window.focus", EventType::WindowFocus},
     // {"window.unfocus", EventType::WindowUnfocus},
     // {"window.move", EventType::WindowMove},
     // {"window.resize", EventType::WindowResize},
     // {"window.minimize", EventType::WindowMinimize},
     // {"window.maximize", EventType::WindowMaximize},
-    // {"workspace.change", EventType::WorkspaceChange},
     // {"workspace.add", EventType::WorkspaceAdd},
     // {"workspace.remove", EventType::WorkspaceRemove},
     // {"workspace.rename", EventType::WorkspaceRename},
@@ -1599,9 +1614,8 @@ luaOn(lua_State *L)
     auto ref = std::make_shared<LuaRef>(mainThread(L),
                                         luaL_ref(L, LUA_REGISTRYINDEX));
 
-    const int id = wmFrom(L)->eventBus().add(
-        type, [ref](const EventData &data) { callRef(ref->L, ref->ref, data); },
-        Once);
+    const int id = wmFrom(L)->eventBus().add(type, [ref](const EventData &data)
+    { callRef(ref->L, ref->ref, data); }, Once);
 
     lua_createtable(L, 0, 1);
     lua_pushinteger(L, id);
@@ -1623,7 +1637,7 @@ listenerOff(lua_State *L)
 // ---------------------------------------------------------------------------
 // Rules: properties applied to every new window that matches.
 
-char kRulesKey;     // registry: array of {match = table, effect = table|function}
+char kRulesKey; // registry: array of {match = table, effect = table|function}
 char kRuleApplyKey; // registry: the function below, compiled once
 
 // Strings match exactly; use a function for anything fancier. A workspace or
@@ -1731,7 +1745,7 @@ struct Timer
     wl_event_source *src = nullptr;
     std::shared_ptr<LuaRef> fn;
 
-    Timer() = default;
+    Timer()              = default;
     Timer(const Timer &) = delete;
     ~Timer()
     {
@@ -1746,14 +1760,14 @@ uint64_t g_nextTimerId = 1;
 std::vector<std::unique_ptr<Timer>>::iterator
 findTimer(uint64_t id)
 {
-    return std::ranges::find_if(g_timers, [id](const auto &t)
-    { return t->id == id; });
+    return std::ranges::find_if(g_timers,
+                                [id](const auto &t) { return t->id == id; });
 }
 
 int
 onTimer(void *data)
 {
-    const uint64_t id = static_cast<Timer *>(data)->id;
+    const uint64_t id                = static_cast<Timer *>(data)->id;
     // Keep the handler alive while it runs: it may cancel its own timer.
     const std::shared_ptr<LuaRef> fn = static_cast<Timer *>(data)->fn;
     callRef(fn->L, fn->ref, EventData{});
@@ -1838,8 +1852,8 @@ timerCancel(lua_State *L)
 {
     luaL_checktype(L, 1, LUA_TTABLE);
     lua_getfield(L, 1, "id");
-    const auto id = static_cast<uint64_t>(luaL_checkinteger(L, -1));
-    auto it       = findTimer(id);
+    const auto id    = static_cast<uint64_t>(luaL_checkinteger(L, -1));
+    auto it          = findTimer(id);
     const bool found = it != g_timers.end();
     if (found)
         g_timers.erase(it);
@@ -2162,7 +2176,8 @@ MuWM::initLuaBindings()
         // lua ---@field output mu.Output|nil The focused output, if any.
         getterField("output", getOutput),
 
-        // lua ---@field outputs mu.Output[] All outputs. Also indexable by name:
+        // lua ---@field outputs mu.Output[] All outputs. Also indexable by
+        // name:
         // mu.outputs["DP-1"].
         getterField("outputs", getOutputs),
 

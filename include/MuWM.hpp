@@ -254,6 +254,8 @@ private:
     void onPinchUpdate(void *data);
     void onPinchEnd(void *data);
     void onSetIcon(void *data);
+    void onToplevelTagSet(void *data);
+    void onToplevelTagDescriptionSet(void *data);
 
     void updateConstraint(wlr_surface *focus);
     void deactivateConstraint();
@@ -307,6 +309,7 @@ private:
     wlr_xdg_decoration_manager_v1 *m_decoManager              = nullptr;
     wlr_layer_shell_v1 *m_layerShell                          = nullptr;
     wlr_output_manager_v1 *m_outputManager                    = nullptr;
+    wlr_xdg_toplevel_tag_manager_v1 *m_tagManager             = nullptr;
     wlr_cursor_shape_manager_v1 *m_cursorShapeManager         = nullptr;
     wlr_ext_foreign_toplevel_list_v1 *m_foreignList           = nullptr;
     wlr_session_lock_manager_v1 *m_lockManager                = nullptr;
@@ -378,6 +381,8 @@ private:
     Listener<MuWM> m_startDrag;
     Listener<MuWM> m_dragIconDestroy;
     Listener<MuWM> m_keyboardInhibit;
+    Listener<MuWM> m_toplevelTagSet;
+    Listener<MuWM> m_toplevelTagDescriptionSet;
 
     // Super+drag: left button moves a window, right button resizes it.
     enum class Grab

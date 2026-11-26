@@ -11,9 +11,13 @@
 ---Names accepted by mu.on and mu.once.
 ---@alias mu.Event
 ---| "startup" # The compositor is up (fires once, not on reload).
+---| "quit" # The compositor is quitting (fires once, not on reload).
 ---| "config.reload" # The config was reloaded successfully.
 ---| "window.open" # A window appeared; its handler gets the window.
 ---| "window.close" # A window went away; its handler gets the (now invalid) window.
+---| "window.fullscreen" # A window changed its fullscreen state; its handler gets the window.
+---| "workspace.change" # The focused workspace changed; its handler gets the new workspace
+
 
 ---A window. A handle: it stays usable for as long as the window exists, and
 ---afterwards reads give the last known values (see valid) while writes do
@@ -35,6 +39,8 @@
 ---@field close fun(self: mu.Window) Ask the window to close; does nothing if it is gone.
 ---@field focus fun(self: mu.Window) Focus the window, switching to its workspace first.
 ---@field move_to_workspace fun(self: mu.Window, workspace: mu.Workspace|integer|string, focus?: boolean) Move the window to a workspace. With focus, switch to that workspace and focus the window; without it the window stays where it is on screen. Defaults to mu.config.focus_moved_window.
+---@field tag string The window's tag, or "" if none.
+---@field tag_description string The window's tag description, or "" if none.
 
 ---A workspace of one output, e.g. "3". A handle like mu.Window.
 ---@class mu.Workspace

@@ -3,6 +3,8 @@
 #include "Listener.hpp"
 #include "wlroots.hpp"
 
+#include <string>
+
 struct Workspace;
 class MuWM;
 
@@ -17,6 +19,8 @@ struct Toplevel
     wlr_box floatBox               = {};
     wlr_foreign_toplevel_handle_v1 *wlrHandle = nullptr; // while mapped
     wlr_xdg_toplevel_icon_v1 *icon            = nullptr; // referenced
+    std::string tag;            // set by the client via xdg-toplevel-tag
+    std::string tagDescription; // localized; don't match on it
     Listener<Toplevel> map;
     Listener<Toplevel> unmap;
     Listener<Toplevel> commit;

@@ -14,6 +14,8 @@ struct WindowInfo
     std::string workspace;
     uint64_t workspaceId = 0; // 0: not on a workspace
     std::string output;
+    std::string tag;
+    std::string tagDescription;
     int x          = 0;
     int y          = 0;
     int width      = 0;
@@ -49,4 +51,4 @@ struct OutputInfo
 };
 
 // monostate: events without a payload.
-using EventData = std::variant<std::monostate, WindowInfo>;
+using EventData = std::variant<std::monostate, WindowInfo, WorkspaceInfo>;

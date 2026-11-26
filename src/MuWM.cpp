@@ -50,6 +50,18 @@ isPrivilegedGlobal(const char *name)
             return true;
     return false;
 }
+
+// The window for an xdg toplevel, also before it has mapped (it is not on a
+// workspace yet). xdg->base->data is its surface tree, whose parent is t->tree.
+static Toplevel *
+toplevelFromXdg(wlr_xdg_toplevel *xdg)
+{
+    auto *tree = static_cast<wlr_scene_tree *>(xdg->base->data);
+    if (!tree || !tree->node.parent)
+        return nullptr;
+    return static_cast<Toplevel *>(tree->node.parent->node.data);
+}
+
 } // namespace
 
 MuWM::MuWM(const argparse::ArgumentParser &parser) : m_parser(parser)
@@ -113,6 +125,8 @@ MuWM::~MuWM()
     m_requestStartDrag.unbind();
     m_startDrag.unbind();
     m_dragIconDestroy.unbind();
+    m_toplevelTagSet.unbind();
+    m_toplevelTagDescriptionSet.unbind();
 
     if (m_outputListener.listener.link.prev)
         wl_list_remove(&m_outputListener.listener.link);
@@ -394,7 +408,14 @@ MuWM::init()
 
     wlr_alpha_modifier_v1_create(m_display);
     // wlr_xdg_system_bell_v1_create(m_display, 1);
-    wlr_xdg_toplevel_tag_manager_v1_create(m_display, 1);
+    m_tagManager = wlr_xdg_toplevel_tag_manager_v1_create(m_display, 1);
+
+    m_toplevelTagSet.bind<&MuWM::onToplevelTagSet>(
+        &m_tagManager->events.set_tag, this);
+
+    m_toplevelTagDescriptionSet.bind<&MuWM::onToplevelTagDescriptionSet>(
+        &m_tagManager->events.set_description, this);
+
     m_iconManager = wlr_xdg_toplevel_icon_manager_v1_create(m_display, 1);
     m_setIcon.bind<&MuWM::onSetIcon>(&m_iconManager->events.set_icon, this);
 
@@ -1034,15 +1055,17 @@ WindowInfo
 MuWM::windowInfo(const Toplevel *t) const
 {
     WindowInfo info;
-    info.id         = t->id;
-    info.title      = t->title();
-    info.appId      = t->appId();
-    info.x          = t->tree->node.x;
-    info.y          = t->tree->node.y;
-    info.width      = t->surface()->current.width;
-    info.height     = t->surface()->current.height;
-    info.floating   = t->floating;
-    info.fullscreen = t->fullscreen;
+    info.id             = t->id;
+    info.title          = t->title();
+    info.appId          = t->appId();
+    info.x              = t->tree->node.x;
+    info.y              = t->tree->node.y;
+    info.width          = t->surface()->current.width;
+    info.height         = t->surface()->current.height;
+    info.floating       = t->floating;
+    info.fullscreen     = t->fullscreen;
+    info.tag            = t->tag;
+    info.tagDescription = t->tagDescription;
     if (const Workspace *ws = t->workspace)
     {
         info.workspace   = ws->name;
@@ -1865,6 +1888,7 @@ MuWM::clearBindings()
 void
 MuWM::quit()
 {
+    m_eventBus.emit(EventType::Quit, {});
     wl_display_terminate(m_display);
 }
 
@@ -2240,6 +2264,7 @@ MuWM::switchWorkspace(Output *out, Workspace *ws_target)
     else if (!m_focusedLayer && !m_locked)
         wlr_seat_keyboard_clear_focus(m_seat);
 
+    m_eventBus.emit(EventType::WorkspaceChange, workspaceInfo(ws_target));
     updateIdleInhibit();
 }
 
@@ -2343,6 +2368,8 @@ MuWM::setFullscreen(Toplevel *toplevel, bool fullscreen)
         for (Toplevel *other : std::vector<Toplevel *>(ws->toplevels))
             if (other != toplevel && other->fullscreen)
                 setFullscreen(other, false);
+
+    m_eventBus.emit(EventType::WindowFullscreen, windowInfo(toplevel));
 
     arrange(ws);
 }
@@ -3557,8 +3584,8 @@ MuWM::workspaceInfo(const Workspace *ws) const
     info.index       = static_cast<int>(ws->slot) + 1;
     info.windowCount = static_cast<int>(ws->toplevels.size());
     info.urgent      = ws->urgent;
-    info.masterRatio
-        = ws->masterRatio >= 0.0f ? ws->masterRatio : m_config.layout.master_ratio;
+    info.masterRatio = ws->masterRatio >= 0.0f ? ws->masterRatio
+                                               : m_config.layout.master_ratio;
     if (ws->output)
     {
         info.output  = ws->output->output->name;
@@ -3592,4 +3619,27 @@ MuWM::onKeyboardInhibit(void *data)
 {
     auto *inh = static_cast<wlr_keyboard_shortcuts_inhibitor_v1 *>(data);
     wlr_keyboard_shortcuts_inhibitor_v1_activate(inh);
+}
+
+void
+MuWM::onToplevelTagSet(void *data)
+{
+    auto *ev
+        = static_cast<wlr_xdg_toplevel_tag_manager_v1_set_tag_event *>(data);
+    Toplevel *t = toplevelFromXdg(ev->toplevel);
+    if (!t || !ev->tag)
+        return;
+    t->tag = ev->tag;
+}
+
+void
+MuWM::onToplevelTagDescriptionSet(void *data)
+{
+    auto *ev
+        = static_cast<wlr_xdg_toplevel_tag_manager_v1_set_description_event *>(
+            data);
+    Toplevel *t = toplevelFromXdg(ev->toplevel);
+    if (!t || !ev->description)
+        return;
+    t->tagDescription = ev->description;
 }
