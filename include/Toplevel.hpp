@@ -18,6 +18,9 @@ struct Toplevel
     wlr_scene_tree *tree = nullptr; // container: surface + borders
     wlr_scene_tree *surfaceTree = nullptr; // just the client's surfaces
     wlr_scene_rect *border[4]   = {};      // top, bottom, left, right
+#ifdef MUWM_HAS_SCENEFX
+    wlr_scene_shadow *shadow = nullptr; // the shadow; node.data is this window
+#endif
     wlr_box floatBox
         = {}; // the window area, including borders, in output coordinates
     wlr_foreign_toplevel_handle_v1 *wlrHandle = nullptr; // while mapped
@@ -90,15 +93,17 @@ struct Toplevel
     void setFullscreen(bool fullscreen); // tells the client; see MuWM::
     void scheduleConfigure();
     void close();
-    const char *title() const; // never null
-    const char *appId() const; // never null
-    bool isDialog() const;     // has a parent window
-    bool isFixedSize() const;  // min size equals max size
+    const char *title() const;
+    const char *appId() const;
+    bool isDialog() const;
+    bool isFixedSize() const;
     bool isModal() const;
     bool hasModalChild() const;
+    void createShadow();
+    void updateShadow();
 
     bool placed = false;        // false until the first moveTo; reset on unmap
-    int sentW = -1, sentH = -1; // last size we asked an xdg client for
+    int sentW = -1, sentH = -1; // the last size sent to the client
     int borderW = -1, borderH = -1,
         borderB = -1; // the last size of the borders
 

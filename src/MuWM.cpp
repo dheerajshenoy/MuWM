@@ -94,9 +94,13 @@ snapshotNode(ClosingWindow *cw, wlr_scene_node *node, int x, int y)
             cw->items.push_back(it);
             break;
         }
+#ifdef MUWM_HAS_SCENEFX
         case WLR_SCENE_NODE_SHADOW:
         case WLR_SCENE_NODE_OPTIMIZED_BLUR:
         case WLR_SCENE_NODE_BLUR:
+            break;
+#endif
+        default:
             break;
     }
 }
@@ -858,6 +862,7 @@ MuWM::handleNewToplevel(wlr_xdg_toplevel *xdg)
     for (auto &r : t->border)
         r = wlr_scene_rect_create(t->tree, 1, 1,
                                   m_config.border.unfocused_color);
+    t->createShadow(); // lowers itself below the borders
 
     t->surfaceTree  = wlr_scene_xdg_surface_create(t->tree, xdg->base);
     xdg->base->data = t->surfaceTree; // popups look their parent's tree up here
@@ -2135,6 +2140,10 @@ MuWM::applyPending()
     if (changes & ChangeRecolor)
         recolorBorders();
 
+    if (changes & ChangeShadow)
+        for (Toplevel *t : allToplevels())
+            t->updateShadow();
+
     if (changes & (ChangeKeyboard | ChangePointer))
         applyDeviceConfig(changes);
 
@@ -3285,6 +3294,7 @@ MuWM::onNewXWaylandSurface(void *data)
     for (auto &r : t->border)
         r = wlr_scene_rect_create(t->tree, 1, 1,
                                   m_config.border.unfocused_color);
+    t->createShadow(); // lowers itself below the borders
 
     t->tree->node.data = t;
     t->associate.bind<&Toplevel::onAssociate>(&xs->events.associate, t);

@@ -140,4 +140,16 @@ struct Config
         AnimSpec close{.duration_ms = 150, .style = AnimStyle::Zoom};
         AnimSpec workspace{.duration_ms = 250};
     } animation;
+
+    // Only drawn in scenefx builds; elsewhere the settings are accepted and
+    // ignored, so one init.lua works with both.
+    struct Shadow
+    {
+        bool enabled   = true;
+        float opacity  = 0.5f;
+        int sigma      = 10;
+        int offset_x   = 0;
+        int offset_y   = 0;
+        float color[4] = {0.0f, 0.0f, 0.0f, 1.0f};
+    } shadow;
 };

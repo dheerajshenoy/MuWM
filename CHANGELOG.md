@@ -13,6 +13,14 @@
 - So far only close animations read their own settings; move, open and
   workspace animations still use the global `enabled` and `duration`.
 
+### Shadows
+- In scenefx builds, windows cast a blurred shadow behind their borders. It
+  hides with the borders, e.g. for fullscreen windows.
+- `mu.config.shadow` takes `enabled`, `color`, `opacity`, `sigma` (blur
+  radius) and `offset_x`/`offset_y`. Changes apply to open windows at once.
+  Builds without scenefx accept the settings and ignore them, so one
+  `init.lua` works with both.
+
 ### Lua configuration
 - `mu.gesture("swipe3+left", action)` binds touchpad swipes. A swipe runs its
   action once the fingers move `gestures.swipe_threshold`.
@@ -44,6 +52,7 @@
 
 ### Fixes
 - Fixed assertions on exit caused by listeners that were never unbound.
+- Popup menus are no longer drawn under their window's border.
 
 ## 0.1.1
 

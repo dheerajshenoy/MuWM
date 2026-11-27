@@ -2105,12 +2105,10 @@ MuWM::loadConfig()
 void
 MuWM::initLuaBindings()
 {
-    // The proxies keep raw pointers to these, so they must outlive this
-    // function (locals would dangle as soon as it returned).
     static Group rootGroup, configGroup, borderGroup, keyboardGroup, mouseGroup,
         touchpadGroup, gapsGroup, layoutGroup, cursorGroup, dimGroup,
         opacityGroup, gesturesGroup, animationGroup, animMoveGroup,
-        animOpenGroup, animCloseGroup, animWorkspaceGroup;
+        shadowGroup, animOpenGroup, animCloseGroup, animWorkspaceGroup;
 
     registerHandle<WindowKind>(m_lua);
     registerHandle<WorkspaceKind>(m_lua);
@@ -2141,6 +2139,34 @@ MuWM::initLuaBindings()
 
         // lua ---@field theme? string Cursor theme name.
         stringField("theme", &m_config.cursor.theme, MuWM::ChangeCursor),
+    };
+
+    // lua ---@class mu.config.shadow
+    shadowGroup.fields = {
+        // lua ---@field enabled? boolean Whether to draw a shadow behind
+        // windows. Needs a build with scenefx; otherwise ignored.
+        boolField("enabled", &m_config.shadow.enabled, MuWM::ChangeShadow),
+
+        // lua ---@field opacity? number Shadow opacity, between 0 and 1.
+        floatField("opacity", &m_config.shadow.opacity, MuWM::ChangeShadow,
+                   0.0f, 1.0f),
+
+        // lua ---@field color? mu.Color Shadow color.
+        colorField("color", m_config.shadow.color, MuWM::ChangeShadow),
+
+        // lua ---@field sigma? integer Shadow blur radius in pixels. Must be
+        // between 0 and 100.
+        intField("sigma", &m_config.shadow.sigma, 0, 100, MuWM::ChangeShadow),
+
+        // lua ---@field offset_x? integer Shadow offset in pixels. Must be
+        // between -100 and 100.
+        intField("offset_x", &m_config.shadow.offset_x, -100, 100,
+                 MuWM::ChangeShadow),
+
+        // lua ---@field offset_y? integer Shadow offset in pixels. Must be
+        // between -100 and 100.
+        intField("offset_y", &m_config.shadow.offset_y, -100, 100,
+                 MuWM::ChangeShadow),
     };
 
     // lua ---@class mu.config.border
@@ -2372,6 +2398,9 @@ MuWM::initLuaBindings()
 
         // lua ---@field dim mu.config.dim Dimming options.
         subField("dim", &dimGroup),
+
+        // lua ---@field shadow mu.config.shadow Window shadow options.
+        subField("shadow", &shadowGroup),
 
         // lua ---@field opacity mu.config.opacity Opacity options.
         subField("opacity", &opacityGroup),

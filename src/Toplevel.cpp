@@ -163,6 +163,15 @@ Toplevel::onDestroy(void *)
         wlr_xdg_toplevel_icon_v1_unref(icon);
         icon = nullptr;
     }
+
+#ifdef MUWM_HAS_SCENEFX
+    if (shadow)
+    {
+        wlr_scene_node_destroy(&shadow->node);
+        shadow = nullptr;
+    }
+#endif
+
     destroyForeignHandle();
     destroyWlrHandle();
     wm->removeToplevel(this);
@@ -204,6 +213,8 @@ Toplevel::resizeBorders(int w, int h)
 
     if (dim)
         wlr_scene_rect_set_size(dim, w, h);
+
+    updateShadow();
 }
 
 void
@@ -211,6 +222,8 @@ Toplevel::setBordersVisible(bool visible)
 {
     for (auto *r : border)
         wlr_scene_node_set_enabled(&r->node, visible);
+
+    updateShadow(); // follows the borders, and respects shadow.enabled
 }
 
 void
@@ -621,4 +634,58 @@ Toplevel::tickMove(int64_t now)
     double y = animY.value(now);
     wlr_scene_node_set_position(&tree->node, std::lround(x), std::lround(y));
     return animX.running() || animY.running();
+}
+
+void
+Toplevel::createShadow()
+{
+#ifdef MUWM_HAS_SCENEFX
+    const float none[4] = {0, 0, 0, 0};
+    shadow = wlr_scene_shadow_create(tree, 0, 0, 0, 0.0f, none);
+    wlr_scene_node_lower_to_bottom(&shadow->node); // below borders + surface
+    updateShadow(); // color, blur and visibility from the config
+#endif
+}
+
+void
+Toplevel::updateShadow()
+{
+#ifdef MUWM_HAS_SCENEFX
+    if (!shadow)
+        return;
+
+    const Config::Shadow &cfg = wm->config().shadow;
+
+    // Shown only with the borders (not fullscreen, not smart-hidden).
+    const bool visible = cfg.enabled && border[0]->node.enabled;
+    wlr_scene_node_set_enabled(&shadow->node, visible);
+    if (!visible)
+        return;
+
+    // The config holds straight alpha; scenefx wants premultiplied.
+    const float a        = cfg.color[3] * cfg.opacity;
+    const float color[4] = {cfg.color[0] * a, cfg.color[1] * a,
+                            cfg.color[2] * a, a};
+    wlr_scene_shadow_set_color(shadow, color);
+    wlr_scene_shadow_set_blur_sigma(shadow, float(cfg.sigma));
+
+    if (borderW < 0)
+        return; // not sized yet; resizeBorders calls us again
+
+    const int offX = cfg.offset_x, offY = cfg.offset_y;
+    const int b   = borderB;
+    const int pad = cfg.sigma; // room for the blur
+    const int ow  = borderW + 2 * b;                    // window plus borders
+    const int oh  = borderH + 2 * b;
+
+    wlr_scene_shadow_set_size(shadow, ow + 2 * pad, oh + 2 * pad);
+    wlr_scene_node_set_position(&shadow->node, -b - pad + offX,
+                                -b - pad + offY);
+
+    // Don't draw under the window itself (visible through translucent ones).
+    // The area is relative to the shadow node.
+    wlr_scene_shadow_set_clipped_region(
+        shadow, {.area    = {pad - offX, pad - offY, ow, oh},
+                 .corners = corner_radii_none()});
+#endif
 }

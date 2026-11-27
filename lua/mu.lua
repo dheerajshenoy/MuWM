@@ -105,6 +105,14 @@
 ---@field size? integer Cursor size in pixels. Must be between 1 and 1000.
 ---@field theme? string Cursor theme name.
 
+---@class mu.config.shadow
+---@field enabled? boolean Whether to draw a shadow behind windows. Needs a build with scenefx; otherwise ignored.
+---@field opacity? number Shadow opacity, between 0 and 1.
+---@field color? mu.Color Shadow color.
+---@field sigma? integer Shadow blur radius in pixels. Must be between 0 and 100.
+---@field offset_x? integer Shadow offset in pixels. Must be between -100 and 100.
+---@field offset_y? integer Shadow offset in pixels. Must be between -100 and 100.
+
 ---@class mu.config.border
 ---@field width? integer Border width in pixels. Must be between 0 and 1000.
 ---@field focused? mu.Color Border color for the focused window.
@@ -171,6 +179,7 @@
 ---@field new_client_position mu.NewClientPosition Where a new window is inserted in the layout.
 ---@field gestures mu.config.gestures Touchpad gesture options.
 ---@field dim mu.config.dim Dimming options.
+---@field shadow mu.config.shadow Window shadow options.
 ---@field opacity mu.config.opacity Opacity options.
 ---@field workspaces string[] Workspace names; their number is the workspace count.
 ---@field dynamic_workspaces boolean Whether to create and destroy workspaces on demand, instead of using the fixed list in mu.config.workspaces.
