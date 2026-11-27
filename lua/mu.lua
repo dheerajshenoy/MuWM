@@ -124,6 +124,7 @@
 ---@field focused_only? boolean Whether to blur only behind the focused window.
 
 ---@class mu.config.border
+---@field radius? integer Border corner radius in pixels. Must be between 0 and 1000.
 ---@field width? integer Border width in pixels. Must be between 0 and 1000.
 ---@field focused? mu.Color Border color for the focused window.
 ---@field unfocused? mu.Color Border color for unfocused windows.
