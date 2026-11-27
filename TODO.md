@@ -2,14 +2,11 @@
 
 Tiling Wayland compositor in C++ on wlroots (CMake).
 
-- [ ] IPC / control socket (`muwm-msg`) for scripting and bars that need layout and focus info
-
 ## Protocols
 
 - [ ] ext-transient-seat-v1
 - [ ] drm-lease-v1
 - [ ] tablet-unstable-v2
-- [ ] xdg-system-bell
 - [ ] wlr-virtual-pointer-unstable-v1
 - [ ] virtual-keyboard-unstable-v1
 - [ ] color-management-v1: HDR / wide-gamut; needs per-surface color conversion in the render path
