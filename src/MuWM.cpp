@@ -376,9 +376,7 @@ MuWM::init()
         return false;
     }
 
-#ifdef MUWM_HAS_SCENEFX
-    wlr_scene_set_blur_radius(m_scene, m_config.blur.sigma);
-#endif
+    applyBlurData();
 
     if (m_dmabuf)
         wlr_scene_set_linux_dmabuf_v1(m_scene, m_dmabuf);
@@ -2133,6 +2131,23 @@ MuWM::scheduleFrames()
         wlr_output_schedule_frame(o->output);
 }
 
+// scenefx's blur is dual Kawase: passes and radius are its only strength
+// knobs, and they are shared by every blur node in the scene.
+void
+MuWM::applyBlurData()
+{
+#ifdef MUWM_HAS_SCENEFX
+    const Config::Blur &cfg = m_config.blur;
+    blur_data d             = blur_data_get_default();
+    if (cfg.passes >= 0)
+        d.num_passes = cfg.passes;
+    if (cfg.radius >= 0)
+        d.radius = float(cfg.radius);
+    wlr_scene_set_blur_data(m_scene, d.num_passes, int(d.radius), d.noise,
+                            d.brightness, d.contrast, d.saturation);
+#endif
+}
+
 void
 MuWM::applyPending()
 {
@@ -2152,9 +2167,7 @@ MuWM::applyPending()
 
     if (changes & ChangeBlur)
     {
-#ifdef MUWM_HAS_SCENEFX
-        wlr_scene_set_blur_radius(m_scene, m_config.blur.sigma); // scene-wide
-#endif
+        applyBlurData(); // scene-wide
         for (Toplevel *t : allToplevels())
             t->updateBlur();
     }

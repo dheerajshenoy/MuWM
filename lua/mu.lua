@@ -116,7 +116,8 @@
 
 ---@class mu.config.blur
 ---@field enabled? boolean Whether to blur the background behind windows. Needs a build with scenefx; otherwise ignored.
----@field sigma? integer Blur radius in pixels. Must be between 0 and 100.
+---@field passes? integer Number of blur passes; each one roughly doubles how far the blur reaches. Between -1 and 10; -1 uses the default.
+---@field radius? integer Sampling offset per pass in pixels. Between -1 and 100; -1 uses the default.
 ---@field alpha? number Blur opacity, between 0 and 1.
 ---@field bottom_only? boolean Whether to blur only the wallpaper instead of the windows behind. Faster.
 

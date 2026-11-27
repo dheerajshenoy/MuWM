@@ -25,10 +25,13 @@
 - In scenefx builds, translucent windows can blur what is behind them
   (`mu.config.blur.enabled`, off by default). The blur covers the window's
   surface and hides with its borders, e.g. for fullscreen windows.
-- `mu.config.blur` also takes `sigma` (blur radius, shared by all windows),
-  `alpha` and `bottom_only`, which blurs only the wallpaper instead of the
-  windows behind. `bottom_only` needs a per-output optimized blur that isn't
-  there yet. Builds without scenefx accept the settings and ignore them.
+- The blur is dual Kawase: `mu.config.blur.passes` (each pass roughly
+  doubles its reach) and `radius` (offset per pass) set its strength for all
+  windows; `-1` keeps the scenefx default.
+- `alpha` sets the blur opacity and `bottom_only` blurs only the wallpaper
+  instead of the windows behind. `bottom_only` needs a per-output optimized
+  blur that isn't there yet. Builds without scenefx accept the settings and
+  ignore them.
 
 ### Lua configuration
 - `mu.gesture("swipe3+left", action)` binds touchpad swipes. A swipe runs its

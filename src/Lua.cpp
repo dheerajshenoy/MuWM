@@ -2181,9 +2181,14 @@ MuWM::initLuaBindings()
         // behind windows. Needs a build with scenefx; otherwise ignored.
         boolField("enabled", &m_config.blur.enabled, MuWM::ChangeBlur),
 
-        // lua ---@field sigma? integer Blur radius in pixels. Must be between
-        // 0 and 100.
-        intField("sigma", &m_config.blur.sigma, 0, 100, MuWM::ChangeBlur),
+        // lua ---@field passes? integer Number of blur passes; each one
+        // roughly doubles how far the blur reaches. Between -1 and 10; -1
+        // uses the default.
+        intField("passes", &m_config.blur.passes, -1, 10, MuWM::ChangeBlur),
+
+        // lua ---@field radius? integer Sampling offset per pass in pixels.
+        // Between -1 and 100; -1 uses the default.
+        intField("radius", &m_config.blur.radius, -1, 100, MuWM::ChangeBlur),
 
         // lua ---@field alpha? number Blur opacity, between 0 and 1.
         floatField("alpha", &m_config.blur.alpha, MuWM::ChangeBlur, 0.0f, 1.0f),

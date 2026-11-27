@@ -155,7 +155,8 @@ struct Config
     struct Blur
     {
         bool enabled     = false;
-        int sigma        = 10;
+        int passes       = -1; // dual Kawase passes; < 0: scenefx default
+        int radius       = -1; // offset per pass in px; < 0: scenefx default
         float alpha      = 0.5f;
         // Blur only the cached wallpaper, not the windows behind. Cheap, but
         // needs the per-output optimized blur node.

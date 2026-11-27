@@ -331,6 +331,8 @@ private:
     void playBellSound();
 
 private:
+    void applyBlurData(); // scene-wide blur parameters from m_config.blur
+
     bool m_ok           = false;
     bool m_checkOnly    = false; // --check-config: no backend, no side effects
     bool m_configFailed = false; // the last loadConfig() hit an error
