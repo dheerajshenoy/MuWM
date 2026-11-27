@@ -17,6 +17,7 @@ struct Toplevel
     wlr_scene_rect *dim  = nullptr; // black overlay; node.data is this window
     wlr_scene_tree *tree = nullptr; // container: surface + borders
     wlr_scene_tree *surfaceTree = nullptr; // just the client's surfaces
+    wlr_scene_tree *popupTree   = nullptr; // xdg popups; unclipped, above
     wlr_scene_rect *border[4]   = {};      // top, bottom, left, right
 #ifdef MUWM_HAS_SCENEFX
     wlr_scene_shadow *shadow = nullptr; // the shadow; node.data is this window

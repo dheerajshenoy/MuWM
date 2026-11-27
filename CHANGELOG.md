@@ -67,6 +67,8 @@
 - Popup menus are no longer drawn under their window's border.
 - Translucent border colors are blended correctly instead of looking washed
   out.
+- Windows are clipped to their geometry, so client-drawn shadows and edges
+  (e.g. Firefox's) no longer cover the border.
 
 ## 0.1.1
 

@@ -870,7 +870,11 @@ MuWM::handleNewToplevel(wlr_xdg_toplevel *xdg)
     t->createBlur();
 
     t->surfaceTree  = wlr_scene_xdg_surface_create(t->tree, xdg->base);
-    xdg->base->data = t->surfaceTree; // popups look their parent's tree up here
+    // Popups get their own tree: surfaceTree is clipped to the window
+    // geometry, and the clip would cut them off too. Same origin, so popup
+    // positions don't change.
+    t->popupTree    = wlr_scene_tree_create(t->tree);
+    xdg->base->data = t->popupTree; // popups look their parent's tree up here
     t->id           = m_globalTopLevelId++;
 
     t->map.bind<&Toplevel::onMap>(&xdg->base->surface->events.map, t);

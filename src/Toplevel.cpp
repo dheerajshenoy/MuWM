@@ -128,6 +128,12 @@ Toplevel::onCommit(void *)
     if (workspace && !fullscreen)
         fitBorders();
 
+    // CSD clients (Firefox) draw shadows and edges outside their window
+    // geometry; cut them off so they can't cover the borders. The clip is in
+    // root-surface coordinates, which is what geometry is.
+    wlr_scene_subsurface_tree_set_clip(&surfaceTree->node,
+                                       &xdg->base->geometry);
+
     if (faded)
         updateOpacity();
 
