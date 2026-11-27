@@ -103,6 +103,7 @@ struct Toplevel
     bool hasModalChild() const;
     void createShadow();
     void updateShadow();
+    void updateCornerRadius();
     void destroyShadow();
 
     void createBlur();
@@ -112,6 +113,9 @@ struct Toplevel
     bool placed = false;        // false until the first moveTo; reset on unmap
     int sentW = -1, sentH = -1; // the last size sent to the client
     int borderW = -1, borderH = -1,
+#ifdef MUWM_HAS_SCENEFX
+        borderR = -1,
+#endif
         borderB = -1; // the last size of the borders
 
     Animation animX, animY;

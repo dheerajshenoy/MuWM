@@ -2210,6 +2210,11 @@ MuWM::initLuaBindings()
 
     // lua ---@class mu.config.border
     borderGroup.fields = {
+
+        // lua ---@field radius? integer Border corner radius in pixels. Must
+        // be between 0 and 1000.
+        intField("radius", &bd.radius, 0, 1000, MuWM::ChangeLayout),
+
         // lua ---@field width? integer Border width in pixels. Must be between
         // 0 and 1000.
         intField("width", &bd.width, 0, 1000, MuWM::ChangeLayout),

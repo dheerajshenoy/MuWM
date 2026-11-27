@@ -66,6 +66,7 @@ struct Config
 
     struct Border
     {
+        int radius               = 0;
         int width                = 2;
         float focused_color[4]   = {0.0f, 0.5f, 1.0f, 1.0f};
         float unfocused_color[4] = {0.5f, 0.5f, 0.5f, 1.0f};
@@ -143,6 +144,7 @@ struct Config
 
     struct Shadow
     {
+        int radius         = 0;
         bool enabled       = true;
         float opacity      = 0.5f;
         int sigma          = 10;
@@ -155,13 +157,13 @@ struct Config
 
     struct Blur
     {
-        bool enabled     = false;
-        int passes       = -1; // dual Kawase passes; < 0: scenefx default
-        int radius       = -1; // offset per pass in px; < 0: scenefx default
-        float alpha      = 0.5f;
+        bool enabled      = false;
+        int passes        = -1; // dual Kawase passes; < 0: scenefx default
+        int radius        = -1; // offset per pass in px; < 0: scenefx default
+        float alpha       = 0.5f;
         // Blur only the cached wallpaper, not the windows behind. Cheap, but
         // needs the per-output optimized blur node.
-        bool bottom_only = false;
+        bool bottom_only  = false;
         bool focused_only = false;
     } blur;
 };

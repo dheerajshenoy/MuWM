@@ -134,6 +134,7 @@ Toplevel::onCommit(void *)
     wlr_scene_subsurface_tree_set_clip(&surfaceTree->node,
                                        &xdg->base->geometry);
 
+    updateCornerRadius();
     if (faded)
         updateOpacity();
 
@@ -189,7 +190,7 @@ Toplevel::onDestroy(void *)
     destroyForeignHandle();
     destroyWlrHandle();
     wm->removeToplevel(this);
-    wlr_scene_node_destroy(&tree->node); // container, surface tree and borders
+    wlr_scene_node_destroy(&tree->node);
     map.unbind();
     unmap.unbind();
     commit.unbind();
@@ -208,22 +209,50 @@ Toplevel::onDestroy(void *)
 void
 Toplevel::resizeBorders(int w, int h)
 {
-    const int b = wm->config().border.width;
+    auto border_cfg = wm->config().border;
+    const int b     = border_cfg.width;
+    const int r     = border_cfg.radius;
+#ifdef MUWM_HAS_SCENEFX
+    if (w == borderW && h == borderH && b == borderB && r == borderR)
+#else
     if (w == borderW && h == borderH && b == borderB)
+#endif
         return;
 
     borderW = w;
     borderH = h;
     borderB = b;
 
-    wlr_scene_rect_set_size(border[0], w + 2 * b, b);
-    wlr_scene_node_set_position(&border[0]->node, -b, -b);
-    wlr_scene_rect_set_size(border[1], w + 2 * b, b);
-    wlr_scene_node_set_position(&border[1]->node, -b, h);
-    wlr_scene_rect_set_size(border[2], b, h);
-    wlr_scene_node_set_position(&border[2]->node, -b, 0);
-    wlr_scene_rect_set_size(border[3], b, h);
-    wlr_scene_node_set_position(&border[3]->node, w, 0);
+#ifdef MUWM_HAS_SCENEFX
+    borderR = r;
+    if (r > 0)
+    {
+        // Four strips can't share a corner arc, so draw one frame rect with
+        // the window cut out. Outer radius r + b keeps the width even.
+        wlr_scene_rect_set_size(border[0], w + 2 * b, h + 2 * b);
+        wlr_scene_node_set_position(&border[0]->node, -b, -b);
+        wlr_scene_rect_set_corner_radius(border[0], r + b);
+        wlr_scene_rect_set_clipped_region(
+            border[0], {.area = {b, b, w, h}, .corners = corner_radii_all(r)});
+        for (int i = 1; i < 4; ++i)
+            wlr_scene_rect_set_size(border[i], 0, 0);
+    }
+    else
+#endif
+    {
+        wlr_scene_rect_set_size(border[0], w + 2 * b, b);
+        wlr_scene_node_set_position(&border[0]->node, -b, -b);
+        wlr_scene_rect_set_size(border[1], w + 2 * b, b);
+        wlr_scene_node_set_position(&border[1]->node, -b, h);
+        wlr_scene_rect_set_size(border[2], b, h);
+        wlr_scene_node_set_position(&border[2]->node, -b, 0);
+        wlr_scene_rect_set_size(border[3], b, h);
+        wlr_scene_node_set_position(&border[3]->node, w, 0);
+#ifdef MUWM_HAS_SCENEFX
+        wlr_scene_rect_set_corner_radius(border[0], 0);
+        wlr_scene_rect_set_clipped_region(border[0], {});
+#endif
+    }
 
     if (dim)
         wlr_scene_rect_set_size(dim, w, h);
@@ -238,6 +267,7 @@ Toplevel::setBordersVisible(bool visible)
     for (auto *r : border)
         wlr_scene_node_set_enabled(&r->node, visible);
 
+    updateCornerRadius();
     updateShadow();
     updateBlur();
 }
@@ -253,9 +283,6 @@ Toplevel::setFocused(bool focused)
     updateBlur();   // for blur.focused_only
 }
 
-// The top and left edges show whether the window has focus. A sticky window
-// shows that on its bottom and right edges, so it can be told apart without
-// hiding the focus.
 void
 Toplevel::updateBorder()
 {
@@ -706,8 +733,11 @@ Toplevel::updateShadow()
     // Don't draw under the window itself (visible through translucent ones).
     // The area is relative to the shadow node.
     wlr_scene_shadow_set_clipped_region(
-        shadow, {.area    = {pad - offX, pad - offY, ow, oh},
-                 .corners = corner_radii_none()});
+        shadow,
+        {.area    = {pad - offX, pad - offY, ow, oh},
+         .corners = corner_radii_all(wm->config().border.radius > 0
+                                         ? wm->config().border.radius + b
+                                         : 0)});
 #endif
 }
 
@@ -760,7 +790,7 @@ Toplevel::updateBlur()
 
     wlr_scene_blur_set_alpha(blur, cfg.alpha);
     wlr_scene_blur_set_should_only_blur_bottom_layer(blur, cfg.bottom_only);
-    // Radius is scene-wide (MuWM::applyPending); strength stays at 1.
+    wlr_scene_blur_set_corner_radius(blur, wm->config().border.radius);
 #endif
 }
 
@@ -772,5 +802,30 @@ Toplevel::destroyBlur()
         return;
     wlr_scene_node_destroy(&blur->node);
     blur = nullptr;
+#endif
+}
+
+void
+Toplevel::updateCornerRadius()
+{
+#ifdef MUWM_HAS_SCENEFX
+    if (!surfaceTree)
+        return;
+    struct Ctx
+    {
+        wlr_surface *root;
+        int r;
+    };
+    Ctx ctx{surface(),
+            border[0]->node.enabled ? wm->config().border.radius : 0};
+    wlr_scene_node_for_each_buffer(
+        &surfaceTree->node, [](wlr_scene_buffer *buf, int, int, void *data)
+    {
+        auto *c  = static_cast<Ctx *>(data);
+        auto *ss = wlr_scene_surface_try_from_buffer(buf);
+        // Only the toplevel's own surface; subsurfaces stay square.
+        if (ss && ss->surface == c->root)
+            wlr_scene_buffer_set_corner_radius(buf, c->r);
+    }, &ctx);
 #endif
 }
