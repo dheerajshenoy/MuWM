@@ -260,13 +260,13 @@ void
 Toplevel::updateBorder()
 {
     const auto &bd     = wm->config().border;
-    const float *state = focused ? bd.focused_color : bd.unfocused_color;
-    const float *other = sticky ? bd.sticky_color : state;
+    const float *state = focused ? (sticky ? bd.sticky_color : bd.focused_color)
+                                 : bd.unfocused_color;
 
     setRectColor(border[0], state); // top
-    setRectColor(border[1], other); // bottom
+    setRectColor(border[1], state); // bottom
     setRectColor(border[2], state); // left
-    setRectColor(border[3], other); // right
+    setRectColor(border[3], state); // right
 }
 
 wlr_surface *

@@ -38,7 +38,7 @@
   action once the fingers move `gestures.swipe_threshold`.
 - `mu.config.mouse` has `accel_profile` and `accel_speed`.
 - `mu.config.bell_sound` picks the sound for the system bell.
-- `border.sticky` colors the bottom and right edges of sticky windows.
+- `border.sticky` colors the sticky window borders differently on focus.
 - `muwm --check-config` loads the config, reports errors and exits.
 - Default bindings: Super+J/K focus the next/previous window, Super+Shift+J/K
   swap them, Super+N shows workspace N, Super+Shift+N sends the focused
