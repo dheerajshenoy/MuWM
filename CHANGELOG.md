@@ -17,9 +17,9 @@
 - In scenefx builds, windows cast a blurred shadow behind their borders. It
   hides with the borders, e.g. for fullscreen windows.
 - `mu.config.shadow` takes `enabled`, `color`, `opacity`, `floating_only`,
-  `sigma` (blur radius) and `offset_x`/`offset_y`. Changes apply to open
-  windows at once. Builds without scenefx accept the settings and ignore them,
-  so one `init.lua` works with both.
+  `focused_only`, `sigma` (blur radius) and `offset_x`/`offset_y`. Changes
+  apply to open windows at once. Builds without scenefx accept the settings
+  and ignore them, so one `init.lua` works with both.
 
 ### Blur
 - In scenefx builds, translucent windows can blur what is behind them
@@ -28,10 +28,10 @@
 - The blur is dual Kawase: `mu.config.blur.passes` (each pass roughly
   doubles its reach) and `radius` (offset per pass) set its strength for all
   windows; `-1` keeps the scenefx default.
-- `alpha` sets the blur opacity and `bottom_only` blurs only the wallpaper
-  instead of the windows behind. `bottom_only` needs a per-output optimized
-  blur that isn't there yet. Builds without scenefx accept the settings and
-  ignore them.
+- `alpha` sets the blur opacity, `focused_only` blurs only behind the focused
+  window, and `bottom_only` blurs only the wallpaper instead of the windows
+  behind. `bottom_only` needs a per-output optimized blur that isn't there
+  yet. Builds without scenefx accept the settings and ignore them.
 
 ### Lua configuration
 - `mu.gesture("swipe3+left", action)` binds touchpad swipes. A swipe runs its

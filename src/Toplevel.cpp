@@ -235,6 +235,8 @@ Toplevel::setFocused(bool focused)
     updateBorder();
     updateDim();
     updateOpacity();
+    updateShadow(); // for shadow.focused_only
+    updateBlur();   // for blur.focused_only
 }
 
 // The top and left edges show whether the window has focus. A sticky window
@@ -661,7 +663,8 @@ Toplevel::updateShadow()
     const Config::Shadow &cfg = wm->config().shadow;
 
     // Shown only with the borders (not fullscreen, not smart-hidden).
-    const bool visible = cfg.enabled && border[0]->node.enabled;
+    const bool visible = cfg.enabled && border[0]->node.enabled
+                         && (!cfg.focused_only || focused);
     wlr_scene_node_set_enabled(&shadow->node, visible);
     if (!visible)
         return;
@@ -727,7 +730,8 @@ Toplevel::updateBlur()
     const Config::Blur &cfg = wm->config().blur;
 
     // Shown only with the borders (not fullscreen, not smart-hidden).
-    const bool visible = cfg.enabled && border[0]->node.enabled;
+    const bool visible = cfg.enabled && border[0]->node.enabled
+                         && (!cfg.focused_only || focused);
     wlr_scene_node_set_enabled(&blur->node, visible);
     if (!visible)
         return;

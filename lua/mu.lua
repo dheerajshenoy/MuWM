@@ -113,6 +113,7 @@
 ---@field offset_x? integer Shadow offset in pixels. Must be between -100 and 100.
 ---@field offset_y? integer Shadow offset in pixels. Must be between -100 and 100.
 ---@field floating_only? boolean Whether to draw shadows only for floating windows.
+---@field focused_only? boolean Whether to draw a shadow only for the focused window.
 
 ---@class mu.config.blur
 ---@field enabled? boolean Whether to blur the background behind windows. Needs a build with scenefx; otherwise ignored.
@@ -120,6 +121,7 @@
 ---@field radius? integer Sampling offset per pass in pixels. Between -1 and 100; -1 uses the default.
 ---@field alpha? number Blur opacity, between 0 and 1.
 ---@field bottom_only? boolean Whether to blur only the wallpaper instead of the windows behind. Faster.
+---@field focused_only? boolean Whether to blur only behind the focused window.
 
 ---@class mu.config.border
 ---@field width? integer Border width in pixels. Must be between 0 and 1000.

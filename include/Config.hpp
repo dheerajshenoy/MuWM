@@ -150,6 +150,7 @@ struct Config
         int offset_y       = 0;
         float color[4]     = {0.0f, 0.0f, 0.0f, 1.0f};
         bool floating_only = false;
+        bool focused_only  = false;
     } shadow;
 
     struct Blur
@@ -161,5 +162,6 @@ struct Config
         // Blur only the cached wallpaper, not the windows behind. Cheap, but
         // needs the per-output optimized blur node.
         bool bottom_only = false;
+        bool focused_only = false;
     } blur;
 };

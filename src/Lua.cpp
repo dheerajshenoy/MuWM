@@ -2172,6 +2172,11 @@ MuWM::initLuaBindings()
         // for floating windows.
         boolField("floating_only", &m_config.shadow.floating_only,
                   MuWM::ChangeShadow),
+
+        // lua ---@field focused_only? boolean Whether to draw a shadow only
+        // for the focused window.
+        boolField("focused_only", &m_config.shadow.focused_only,
+                  MuWM::ChangeShadow),
     };
 
     // lua ---@class mu.config.blur
@@ -2196,6 +2201,11 @@ MuWM::initLuaBindings()
         // lua ---@field bottom_only? boolean Whether to blur only the
         // wallpaper instead of the windows behind. Faster.
         boolField("bottom_only", &m_config.blur.bottom_only, MuWM::ChangeBlur),
+
+        // lua ---@field focused_only? boolean Whether to blur only behind the
+        // focused window.
+        boolField("focused_only", &m_config.blur.focused_only,
+                  MuWM::ChangeBlur),
     };
 
     // lua ---@class mu.config.border
