@@ -862,7 +862,8 @@ MuWM::handleNewToplevel(wlr_xdg_toplevel *xdg)
     for (auto &r : t->border)
         r = wlr_scene_rect_create(t->tree, 1, 1,
                                   m_config.border.unfocused_color);
-    t->createShadow(); // lowers itself below the borders
+    if (!m_config.shadow.floating_only)
+        t->createShadow(); // lowers itself below the borders
 
     t->surfaceTree  = wlr_scene_xdg_surface_create(t->tree, xdg->base);
     xdg->base->data = t->surfaceTree; // popups look their parent's tree up here
@@ -2783,7 +2784,22 @@ MuWM::setFloating(Toplevel *t, bool floating)
 {
     if (t->floating == floating)
         return;
+
     t->floating = floating;
+
+    if (m_config.shadow.floating_only)
+    {
+        if (t->floating)
+        {
+            t->createShadow();
+        }
+        else
+        {
+            t->destroyShadow();
+        }
+        t->updateShadow();
+    }
+
     if (!floating || t->floatBox.width > 0)
         return; // reuse the geometry from the last time it floated
 

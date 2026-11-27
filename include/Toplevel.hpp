@@ -101,6 +101,7 @@ struct Toplevel
     bool hasModalChild() const;
     void createShadow();
     void updateShadow();
+    void destroyShadow();
 
     bool placed = false;        // false until the first moveTo; reset on unmap
     int sentW = -1, sentH = -1; // the last size sent to the client

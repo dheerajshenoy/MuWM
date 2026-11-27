@@ -640,8 +640,10 @@ void
 Toplevel::createShadow()
 {
 #ifdef MUWM_HAS_SCENEFX
+    if (shadow)
+        return; // already created
     const float none[4] = {0, 0, 0, 0};
-    shadow = wlr_scene_shadow_create(tree, 0, 0, 0, 0.0f, none);
+    shadow              = wlr_scene_shadow_create(tree, 0, 0, 0, 0.0f, none);
     wlr_scene_node_lower_to_bottom(&shadow->node); // below borders + surface
     updateShadow(); // color, blur and visibility from the config
 #endif
@@ -663,9 +665,9 @@ Toplevel::updateShadow()
         return;
 
     // The config holds straight alpha; scenefx wants premultiplied.
-    const float a        = cfg.color[3] * cfg.opacity;
-    const float color[4] = {cfg.color[0] * a, cfg.color[1] * a,
-                            cfg.color[2] * a, a};
+    const float a = cfg.color[3] * cfg.opacity;
+    const float color[4]
+        = {cfg.color[0] * a, cfg.color[1] * a, cfg.color[2] * a, a};
     wlr_scene_shadow_set_color(shadow, color);
     wlr_scene_shadow_set_blur_sigma(shadow, float(cfg.sigma));
 
@@ -674,8 +676,8 @@ Toplevel::updateShadow()
 
     const int offX = cfg.offset_x, offY = cfg.offset_y;
     const int b   = borderB;
-    const int pad = cfg.sigma; // room for the blur
-    const int ow  = borderW + 2 * b;                    // window plus borders
+    const int pad = cfg.sigma;       // room for the blur
+    const int ow  = borderW + 2 * b; // window plus borders
     const int oh  = borderH + 2 * b;
 
     wlr_scene_shadow_set_size(shadow, ow + 2 * pad, oh + 2 * pad);
@@ -687,5 +689,16 @@ Toplevel::updateShadow()
     wlr_scene_shadow_set_clipped_region(
         shadow, {.area    = {pad - offX, pad - offY, ow, oh},
                  .corners = corner_radii_none()});
+#endif
+}
+
+void
+Toplevel::destroyShadow()
+{
+#ifdef MUWM_HAS_SCENEFX
+    if (!shadow)
+        return;
+    wlr_scene_node_destroy(&shadow->node);
+    shadow = nullptr;
 #endif
 }

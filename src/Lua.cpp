@@ -2167,6 +2167,10 @@ MuWM::initLuaBindings()
         // between -100 and 100.
         intField("offset_y", &m_config.shadow.offset_y, -100, 100,
                  MuWM::ChangeShadow),
+
+        // lua ---@field floating_only? boolean Whether to draw shadows only
+        // for floating windows.
+        boolField("floating_only", &m_config.shadow.floating_only, MuWM::ChangeShadow),
     };
 
     // lua ---@class mu.config.border

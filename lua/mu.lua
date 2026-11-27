@@ -112,6 +112,7 @@
 ---@field sigma? integer Shadow blur radius in pixels. Must be between 0 and 100.
 ---@field offset_x? integer Shadow offset in pixels. Must be between -100 and 100.
 ---@field offset_y? integer Shadow offset in pixels. Must be between -100 and 100.
+---@field floating_only? boolean Whether to draw shadows only for floating windows.
 
 ---@class mu.config.border
 ---@field width? integer Border width in pixels. Must be between 0 and 1000.
