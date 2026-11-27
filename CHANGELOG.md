@@ -65,6 +65,8 @@
 ### Fixes
 - Fixed assertions on exit caused by listeners that were never unbound.
 - Popup menus are no longer drawn under their window's border.
+- Translucent border colors are blended correctly instead of looking washed
+  out.
 
 ## 0.1.1
 

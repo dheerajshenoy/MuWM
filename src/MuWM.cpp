@@ -861,9 +861,10 @@ MuWM::handleNewToplevel(wlr_xdg_toplevel *xdg)
     t->tree = wlr_scene_tree_create(m_windowTree);
 
     // Borders first
+    // Transparent until updateBorder sets the real (premultiplied) color.
+    const float none[4] = {0, 0, 0, 0};
     for (auto &r : t->border)
-        r = wlr_scene_rect_create(t->tree, 1, 1,
-                                  m_config.border.unfocused_color);
+        r = wlr_scene_rect_create(t->tree, 1, 1, none);
     if (!m_config.shadow.floating_only)
         t->createShadow(); // lowers itself below the borders
     t->createBlur();
@@ -3334,9 +3335,10 @@ MuWM::onNewXWaylandSurface(void *data)
     t->tree     = wlr_scene_tree_create(m_windowTree);
     t->id       = m_globalTopLevelId++;
 
+    // Transparent until updateBorder sets the real (premultiplied) color.
+    const float none[4] = {0, 0, 0, 0};
     for (auto &r : t->border)
-        r = wlr_scene_rect_create(t->tree, 1, 1,
-                                  m_config.border.unfocused_color);
+        r = wlr_scene_rect_create(t->tree, 1, 1, none);
 
     if (!m_config.shadow.floating_only)
         t->createShadow();

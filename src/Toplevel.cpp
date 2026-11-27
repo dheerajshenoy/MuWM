@@ -9,6 +9,14 @@ applyOpacity(wlr_scene_buffer *buffer, int, int, void *data)
 {
     wlr_scene_buffer_set_opacity(buffer, *static_cast<float *>(data));
 }
+
+// Config colors are straight alpha; wlroots wants premultiplied.
+static void
+setRectColor(wlr_scene_rect *r, const float c[4])
+{
+    const float pm[4] = {c[0] * c[3], c[1] * c[3], c[2] * c[3], c[3]};
+    wlr_scene_rect_set_color(r, pm);
+}
 } // namespace
 
 // A faded window shows through to whatever is behind it. This replaces the
@@ -249,10 +257,10 @@ Toplevel::updateBorder()
     const float *state = focused ? bd.focused_color : bd.unfocused_color;
     const float *other = sticky ? bd.sticky_color : state;
 
-    wlr_scene_rect_set_color(border[0], state); // top
-    wlr_scene_rect_set_color(border[1], other); // bottom
-    wlr_scene_rect_set_color(border[2], state); // left
-    wlr_scene_rect_set_color(border[3], other); // right
+    setRectColor(border[0], state); // top
+    setRectColor(border[1], other); // bottom
+    setRectColor(border[2], state); // left
+    setRectColor(border[3], other); // right
 }
 
 wlr_surface *
