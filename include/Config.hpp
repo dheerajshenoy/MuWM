@@ -141,8 +141,6 @@ struct Config
         AnimSpec workspace{.duration_ms = 250};
     } animation;
 
-    // Only drawn in scenefx builds; elsewhere the settings are accepted and
-    // ignored, so one init.lua works with both.
     struct Shadow
     {
         bool enabled       = true;
@@ -153,4 +151,14 @@ struct Config
         float color[4]     = {0.0f, 0.0f, 0.0f, 1.0f};
         bool floating_only = false;
     } shadow;
+
+    struct Blur
+    {
+        bool enabled     = false;
+        int sigma        = 10;
+        float alpha      = 0.5f;
+        // Blur only the cached wallpaper, not the windows behind. Cheap, but
+        // needs the per-output optimized blur node.
+        bool bottom_only = false;
+    } blur;
 };

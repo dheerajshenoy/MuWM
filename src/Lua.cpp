@@ -2107,8 +2107,8 @@ MuWM::initLuaBindings()
 {
     static Group rootGroup, configGroup, borderGroup, keyboardGroup, mouseGroup,
         touchpadGroup, gapsGroup, layoutGroup, cursorGroup, dimGroup,
-        opacityGroup, gesturesGroup, animationGroup, animMoveGroup,
-        shadowGroup, animOpenGroup, animCloseGroup, animWorkspaceGroup;
+        opacityGroup, gesturesGroup, animationGroup, animMoveGroup, shadowGroup,
+        animOpenGroup, animCloseGroup, animWorkspaceGroup, blurGroup;
 
     registerHandle<WindowKind>(m_lua);
     registerHandle<WorkspaceKind>(m_lua);
@@ -2170,7 +2170,27 @@ MuWM::initLuaBindings()
 
         // lua ---@field floating_only? boolean Whether to draw shadows only
         // for floating windows.
-        boolField("floating_only", &m_config.shadow.floating_only, MuWM::ChangeShadow),
+        boolField("floating_only", &m_config.shadow.floating_only,
+                  MuWM::ChangeShadow),
+    };
+
+    // lua ---@class mu.config.blur
+    blurGroup.fields = {
+
+        // lua ---@field enabled? boolean Whether to blur the background
+        // behind windows. Needs a build with scenefx; otherwise ignored.
+        boolField("enabled", &m_config.blur.enabled, MuWM::ChangeBlur),
+
+        // lua ---@field sigma? integer Blur radius in pixels. Must be between
+        // 0 and 100.
+        intField("sigma", &m_config.blur.sigma, 0, 100, MuWM::ChangeBlur),
+
+        // lua ---@field alpha? number Blur opacity, between 0 and 1.
+        floatField("alpha", &m_config.blur.alpha, MuWM::ChangeBlur, 0.0f, 1.0f),
+
+        // lua ---@field bottom_only? boolean Whether to blur only the
+        // wallpaper instead of the windows behind. Faster.
+        boolField("bottom_only", &m_config.blur.bottom_only, MuWM::ChangeBlur),
     };
 
     // lua ---@class mu.config.border
@@ -2405,6 +2425,9 @@ MuWM::initLuaBindings()
 
         // lua ---@field shadow mu.config.shadow Window shadow options.
         subField("shadow", &shadowGroup),
+
+        // lua ---@field blur mu.config.blur Window blur options.
+        subField("blur", &blurGroup),
 
         // lua ---@field opacity mu.config.opacity Opacity options.
         subField("opacity", &opacityGroup),

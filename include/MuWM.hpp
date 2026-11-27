@@ -162,6 +162,7 @@ public:
         ChangeCursor    = 1 << 5, // cursor theme / size
         ChangeAnimation = 1 << 6, // animation enabled / duration
         ChangeShadow    = 1 << 7, // shadow color / blur / offset / enabled
+        ChangeBlur      = 1 << 8, // blur enabled / sigma
     };
 
     void scheduleApply(int changes);

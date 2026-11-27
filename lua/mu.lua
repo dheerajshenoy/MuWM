@@ -114,6 +114,12 @@
 ---@field offset_y? integer Shadow offset in pixels. Must be between -100 and 100.
 ---@field floating_only? boolean Whether to draw shadows only for floating windows.
 
+---@class mu.config.blur
+---@field enabled? boolean Whether to blur the background behind windows. Needs a build with scenefx; otherwise ignored.
+---@field sigma? integer Blur radius in pixels. Must be between 0 and 100.
+---@field alpha? number Blur opacity, between 0 and 1.
+---@field bottom_only? boolean Whether to blur only the wallpaper instead of the windows behind. Faster.
+
 ---@class mu.config.border
 ---@field width? integer Border width in pixels. Must be between 0 and 1000.
 ---@field focused? mu.Color Border color for the focused window.
@@ -181,6 +187,7 @@
 ---@field gestures mu.config.gestures Touchpad gesture options.
 ---@field dim mu.config.dim Dimming options.
 ---@field shadow mu.config.shadow Window shadow options.
+---@field blur mu.config.blur Window blur options.
 ---@field opacity mu.config.opacity Opacity options.
 ---@field workspaces string[] Workspace names; their number is the workspace count.
 ---@field dynamic_workspaces boolean Whether to create and destroy workspaces on demand, instead of using the fixed list in mu.config.workspaces.

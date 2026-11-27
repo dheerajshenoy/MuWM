@@ -215,6 +215,7 @@ Toplevel::resizeBorders(int w, int h)
         wlr_scene_rect_set_size(dim, w, h);
 
     updateShadow();
+    updateBlur();
 }
 
 void
@@ -223,7 +224,8 @@ Toplevel::setBordersVisible(bool visible)
     for (auto *r : border)
         wlr_scene_node_set_enabled(&r->node, visible);
 
-    updateShadow(); // follows the borders, and respects shadow.enabled
+    updateShadow();
+    updateBlur();
 }
 
 void
@@ -641,11 +643,11 @@ Toplevel::createShadow()
 {
 #ifdef MUWM_HAS_SCENEFX
     if (shadow)
-        return; // already created
+        return;
     const float none[4] = {0, 0, 0, 0};
     shadow              = wlr_scene_shadow_create(tree, 0, 0, 0, 0.0f, none);
     wlr_scene_node_lower_to_bottom(&shadow->node); // below borders + surface
-    updateShadow(); // color, blur and visibility from the config
+    updateShadow();
 #endif
 }
 
@@ -700,5 +702,57 @@ Toplevel::destroyShadow()
         return;
     wlr_scene_node_destroy(&shadow->node);
     shadow = nullptr;
+#endif
+}
+
+void
+Toplevel::createBlur()
+{
+#ifdef MUWM_HAS_SCENEFX
+    if (blur)
+        return;
+    blur = wlr_scene_blur_create(tree, 0, 0);
+    wlr_scene_node_lower_to_bottom(&blur->node);
+    updateBlur();
+#endif
+}
+
+void
+Toplevel::updateBlur()
+{
+#ifdef MUWM_HAS_SCENEFX
+    if (!blur)
+        return;
+
+    const Config::Blur &cfg = wm->config().blur;
+
+    // Shown only with the borders (not fullscreen, not smart-hidden).
+    const bool visible = cfg.enabled && border[0]->node.enabled;
+    wlr_scene_node_set_enabled(&blur->node, visible);
+    if (!visible)
+        return;
+
+    if (borderW < 0)
+        return; // not sized yet; resizeBorders calls us again
+
+    // Behind the surface only, like dim: it shows through wherever the
+    // client is translucent. A blur doesn't spill past its node, so no pad.
+    wlr_scene_node_set_position(&blur->node, 0, 0);
+    wlr_scene_blur_set_size(blur, borderW, borderH);
+
+    wlr_scene_blur_set_alpha(blur, cfg.alpha);
+    wlr_scene_blur_set_should_only_blur_bottom_layer(blur, cfg.bottom_only);
+    // Radius is scene-wide (MuWM::applyPending); strength stays at 1.
+#endif
+}
+
+void
+Toplevel::destroyBlur()
+{
+#ifdef MUWM_HAS_SCENEFX
+    if (!blur)
+        return;
+    wlr_scene_node_destroy(&blur->node);
+    blur = nullptr;
 #endif
 }

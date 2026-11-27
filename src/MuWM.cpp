@@ -376,6 +376,10 @@ MuWM::init()
         return false;
     }
 
+#ifdef MUWM_HAS_SCENEFX
+    wlr_scene_set_blur_radius(m_scene, m_config.blur.sigma);
+#endif
+
     if (m_dmabuf)
         wlr_scene_set_linux_dmabuf_v1(m_scene, m_dmabuf);
 
@@ -864,6 +868,7 @@ MuWM::handleNewToplevel(wlr_xdg_toplevel *xdg)
                                   m_config.border.unfocused_color);
     if (!m_config.shadow.floating_only)
         t->createShadow(); // lowers itself below the borders
+    t->createBlur();
 
     t->surfaceTree  = wlr_scene_xdg_surface_create(t->tree, xdg->base);
     xdg->base->data = t->surfaceTree; // popups look their parent's tree up here
@@ -2145,6 +2150,15 @@ MuWM::applyPending()
         for (Toplevel *t : allToplevels())
             t->updateShadow();
 
+    if (changes & ChangeBlur)
+    {
+#ifdef MUWM_HAS_SCENEFX
+        wlr_scene_set_blur_radius(m_scene, m_config.blur.sigma); // scene-wide
+#endif
+        for (Toplevel *t : allToplevels())
+            t->updateBlur();
+    }
+
     if (changes & (ChangeKeyboard | ChangePointer))
         applyDeviceConfig(changes);
 
@@ -3310,7 +3324,11 @@ MuWM::onNewXWaylandSurface(void *data)
     for (auto &r : t->border)
         r = wlr_scene_rect_create(t->tree, 1, 1,
                                   m_config.border.unfocused_color);
-    t->createShadow(); // lowers itself below the borders
+
+    if (!m_config.shadow.floating_only)
+        t->createShadow();
+
+    t->createBlur();
 
     t->tree->node.data = t;
     t->associate.bind<&Toplevel::onAssociate>(&xs->events.associate, t);

@@ -20,6 +20,7 @@ struct Toplevel
     wlr_scene_rect *border[4]   = {};      // top, bottom, left, right
 #ifdef MUWM_HAS_SCENEFX
     wlr_scene_shadow *shadow = nullptr; // the shadow; node.data is this window
+    wlr_scene_blur *blur     = nullptr; // the blur; node.data is this window
 #endif
     wlr_box floatBox
         = {}; // the window area, including borders, in output coordinates
@@ -102,6 +103,10 @@ struct Toplevel
     void createShadow();
     void updateShadow();
     void destroyShadow();
+
+    void createBlur();
+    void updateBlur();
+    void destroyBlur();
 
     bool placed = false;        // false until the first moveTo; reset on unmap
     int sentW = -1, sentH = -1; // the last size sent to the client

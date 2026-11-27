@@ -2,9 +2,7 @@
 
 Tiling Wayland compositor in C++ on wlroots (CMake).
 
-- [ ] Window capture of windows on hidden workspaces (their scene node is disabled, so the frame is blank)
 - [ ] IPC / control socket (`muwm-msg`) for scripting and bars that need layout and focus info
-- [ ] Animations (optional)
 
 ## Protocols
 
