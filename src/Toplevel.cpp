@@ -147,7 +147,9 @@ Toplevel::onRequestFullscreen(void *)
 void
 Toplevel::onUnmap(void *)
 {
+    wm->animateClose(this); // snapshot while the last buffer is still attached
     wlr_scene_node_set_enabled(&tree->node, false); // hides the borders too
+    placed = false;
     destroyForeignHandle();
     destroyWlrHandle();
     wm->removeToplevel(this);
@@ -572,4 +574,51 @@ Toplevel::hasModalChild() const
             return true;
     }
     return false;
+}
+
+void
+Toplevel::moveTo(int x, int y, bool animate)
+{
+    if (!animate)
+    {
+        placed = true;
+        animX.set(x);
+        animY.set(y);
+        wlr_scene_node_set_position(&tree->node, x, y);
+        return;
+    }
+
+    const int64_t now = muwm::now_ms();
+    const int dur     = wm->config().animation.duration_ms;
+
+    // First placement after map: slide in from a little below the slot
+    // instead of snapping, so opening a window is visible.
+    if (!placed)
+    {
+        placed                    = true;
+        constexpr int kOpenOffset = 40;
+        animX.set(x);
+        animY.start(y + kOpenOffset, y, dur, now);
+        wlr_scene_node_set_position(&tree->node, x, y + kOpenOffset);
+        wm->scheduleFrames();
+        return;
+    }
+
+    // already moving to the same place
+    if (animX.target() == x && animY.target() == y)
+        return;
+
+    animX.retarget(x, dur, now);
+    animY.retarget(y, dur, now);
+
+    wm->scheduleFrames();
+}
+
+bool
+Toplevel::tickMove(int64_t now)
+{
+    double x = animX.value(now);
+    double y = animY.value(now);
+    wlr_scene_node_set_position(&tree->node, std::lround(x), std::lround(y));
+    return animX.running() || animY.running();
 }

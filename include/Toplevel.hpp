@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Animation.hpp"
 #include "Listener.hpp"
 #include "wlroots.hpp"
 
@@ -96,7 +97,13 @@ struct Toplevel
     bool isModal() const;
     bool hasModalChild() const;
 
+    bool placed = false;        // false until the first moveTo; reset on unmap
     int sentW = -1, sentH = -1; // last size we asked an xdg client for
     int borderW = -1, borderH = -1,
         borderB = -1; // the last size of the borders
+
+    Animation animX, animY;
+
+    void moveTo(int x, int y, bool animate);
+    bool tickMove(int64_t now);
 };

@@ -8,6 +8,26 @@
 ---at the top (master) or bottom of the layout.
 ---@alias mu.NewClientPosition "after_current"|"before_current"|"top"|"bottom"
 
+---An easing curve for animations.
+---@alias mu.Easing "linear"|"out_cubic"|"in_out_cubic"
+
+---How a window appears or disappears. Only used by open and close.
+---@alias mu.AnimStyle "none"|"slide"|"fade"|"zoom"
+
+---Settings for one kind of animation.
+---@class mu.config.animation.spec
+---@field enabled? boolean Whether this kind of animation runs.
+---@field duration? integer Duration in milliseconds; -1 uses mu.config.animation.duration.
+---@field curve? mu.Easing Easing curve.
+---@field style? mu.AnimStyle Open/close effect; ignored by move and workspace.
+
+---mu.config can also be called with a table of options: mu.config { ... }.
+---@class mu.config
+---@overload fun(opts: mu.config.options)
+
+---The table passed to mu.config { ... }: any subset of mu.config.
+---@class (partial) mu.config.options : mu.config
+
 ---Names accepted by mu.on and mu.once.
 ---@alias mu.Event
 ---| "startup" # The compositor is up (fires once, not on reload).
@@ -93,6 +113,14 @@
 ---@field smart? boolean Whether to hide borders when only one window is visible.
 ---@field fullscreen? boolean Whether to draw a border around fullscreen windows.
 
+---@class mu.config.animation
+---@field duration? integer Duration of window animations in milliseconds.
+---@field enabled? boolean Whether to enable window animations.
+---@field move? mu.config.animation.spec Tiling moves.
+---@field open? mu.config.animation.spec New windows.
+---@field close? mu.config.animation.spec Closing windows.
+---@field workspace? mu.config.animation.spec Workspace switches.
+
 ---@class mu.config.layout
 ---@field master_ratio? number The ratio of the master area to the whole screen. Must be between 0 and 1.
 
@@ -135,6 +163,7 @@
 ---@field keyboard mu.config.keyboard Keyboard layout options.
 ---@field mouse mu.config.mouse Mouse options.
 ---@field touchpad mu.config.touchpad Touchpad options.
+---@field animation mu.config.animation Window animation options.
 ---@field gaps mu.config.gaps Window gap options.
 ---@field border mu.config.border Window border options.
 ---@field cursor mu.config.cursor Cursor options.

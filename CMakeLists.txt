@@ -83,6 +83,7 @@ add_executable(${PROJECT_NAME}
     src/XUnmanaged.cpp
     src/IdleInhibitor.cpp
     src/Dialog.cpp
+    src/Animation.cpp
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE

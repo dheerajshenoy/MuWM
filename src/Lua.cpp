@@ -1538,6 +1538,26 @@ struct LuaRef
   ---at the top (master) or bottom of the layout.
   ---@alias mu.NewClientPosition "after_current"|"before_current"|"top"|"bottom"
 
+  ---An easing curve for animations.
+  ---@alias mu.Easing "linear"|"out_cubic"|"in_out_cubic"
+
+  ---How a window appears or disappears. Only used by open and close.
+  ---@alias mu.AnimStyle "none"|"slide"|"fade"|"zoom"
+
+  ---Settings for one kind of animation.
+  ---@class mu.config.animation.spec
+  ---@field enabled? boolean Whether this kind of animation runs.
+  ---@field duration? integer Duration in milliseconds; -1 uses mu.config.animation.duration.
+  ---@field curve? mu.Easing Easing curve.
+  ---@field style? mu.AnimStyle Open/close effect; ignored by move and workspace.
+
+  ---mu.config can also be called with a table of options: mu.config { ... }.
+  ---@class mu.config
+  ---@overload fun(opts: mu.config.options)
+
+  ---The table passed to mu.config { ... }: any subset of mu.config.
+  ---@class (partial) mu.config.options : mu.config
+
   ---Names accepted by mu.on and mu.once.
   ---@alias mu.Event
   ---| "startup" # The compositor is up (fires once, not on reload).
@@ -2001,6 +2021,11 @@ static const std::vector<std::string> kNewClientPositionNames = {
     "bottom",
 };
 
+static const std::vector<std::string> kEasingNames{"linear", "out_cubic",
+                                                   "in_out_cubic"};
+static const std::vector<std::string> kAnimStyleNames{"none", "slide", "fade",
+                                                      "zoom"};
+
 } // namespace
 
 void
@@ -2084,7 +2109,8 @@ MuWM::initLuaBindings()
     // function (locals would dangle as soon as it returned).
     static Group rootGroup, configGroup, borderGroup, keyboardGroup, mouseGroup,
         touchpadGroup, gapsGroup, layoutGroup, cursorGroup, dimGroup,
-        opacityGroup, gesturesGroup;
+        opacityGroup, gesturesGroup, animationGroup, animMoveGroup,
+        animOpenGroup, animCloseGroup, animWorkspaceGroup;
 
     registerHandle<WindowKind>(m_lua);
     registerHandle<WorkspaceKind>(m_lua);
@@ -2143,9 +2169,49 @@ MuWM::initLuaBindings()
         boolField("fullscreen", &bd.fullscreen, MuWM::ChangeLayout),
     };
 
+    // Shared by move/open/close/workspace. Documented as
+    // mu.config.animation.spec in the /*lua block above.
+    auto specFields = [](AnimSpec &s)
+    {
+        return std::vector<Field>{
+            boolField("enabled", &s.enabled, MuWM::ChangeAnimation),
+            intField("duration", &s.duration_ms, -1, 10000,
+                     MuWM::ChangeAnimation),
+            enumField("curve", &s.curve, &kEasingNames, MuWM::ChangeAnimation),
+            enumField("style", &s.style, &kAnimStyleNames,
+                      MuWM::ChangeAnimation),
+        };
+    };
+    auto &an                  = m_config.animation;
+    animMoveGroup.fields      = specFields(an.move);
+    animOpenGroup.fields      = specFields(an.open);
+    animCloseGroup.fields     = specFields(an.close);
+    animWorkspaceGroup.fields = specFields(an.workspace);
+
+    // lua ---@class mu.config.animation
+    animationGroup.fields = {
+        // lua ---@field duration? integer Duration of window animations in
+        // milliseconds.
+        intField("duration", &an.duration_ms, 0, 10000, MuWM::ChangeAnimation),
+
+        // lua ---@field enabled? boolean Whether to enable window animations.
+        boolField("enabled", &m_config.animation.enabled,
+                  MuWM::ChangeAnimation),
+
+        // lua ---@field move? mu.config.animation.spec Tiling moves.
+        subField("move", &animMoveGroup),
+        // lua ---@field open? mu.config.animation.spec New windows.
+        subField("open", &animOpenGroup),
+        // lua ---@field close? mu.config.animation.spec Closing windows.
+        subField("close", &animCloseGroup),
+        // lua ---@field workspace? mu.config.animation.spec Workspace switches.
+        subField("workspace", &animWorkspaceGroup),
+    };
+
     // lua ---@class mu.config.layout
     layoutGroup.fields = {
-        // lua ---@field master_ratio? number The ratio of the master area to
+        // lua ---@field master_ratio? number The ratio of the master
+        // area to
         // the whole screen. Must be between 0 and 1.
         floatField("master_ratio", &m_config.layout.master_ratio,
                    MuWM::ChangeLayout, 0.0f, 1.0f),
@@ -2273,11 +2339,16 @@ MuWM::initLuaBindings()
         // lua ---@field keyboard mu.config.keyboard Keyboard layout options.
         subField("keyboard", &keyboardGroup),
 
+
+
         // lua ---@field mouse mu.config.mouse Mouse options.
         subField("mouse", &mouseGroup),
 
         // lua ---@field touchpad mu.config.touchpad Touchpad options.
         subField("touchpad", &touchpadGroup),
+
+        // lua ---@field animation mu.config.animation Window animation options.
+        subField("animation", &animationGroup),
 
         // lua ---@field gaps mu.config.gaps Window gap options.
         subField("gaps", &gapsGroup),

@@ -13,6 +13,29 @@ enum class NewClientPosition
     Bottom,
 };
 
+enum class Easing
+{
+    Linear = 0,
+    OutCubic,
+    InOutCubic,
+};
+
+enum class AnimStyle
+{
+    None = 0,
+    Slide,
+    Fade,
+    Zoom,
+};
+
+struct AnimSpec
+{
+    bool enabled    = true;
+    int duration_ms = -1; // < 0: use animation.duration_ms
+    Easing curve    = Easing::OutCubic;
+    AnimStyle style = AnimStyle::Slide;
+};
+
 struct Config
 {
     NewClientPosition new_client_position = NewClientPosition::AfterCurrent;
@@ -107,4 +130,14 @@ struct Config
         float swipe_threshold
             = 100.0f; // how far fingers move before a swipe counts
     } gestures;
+
+    struct Animation
+    {
+        bool enabled    = true; // master switch
+        int duration_ms = 200;  // default for every kind
+        AnimSpec move;
+        AnimSpec open{.duration_ms = 150, .style = AnimStyle::Slide};
+        AnimSpec close{.duration_ms = 150, .style = AnimStyle::Zoom};
+        AnimSpec workspace{.duration_ms = 250};
+    } animation;
 };

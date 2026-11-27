@@ -21,6 +21,7 @@ struct LockSurface;
 struct XUnmanaged;
 struct Keyboard;
 struct Pointer;
+struct ClosingWindow;
 
 struct OutputListener
 {
@@ -34,6 +35,22 @@ class MuWM
 public:
     MuWM(const argparse::ArgumentParser &parser);
     ~MuWM();
+
+    enum class AnimKind
+    {
+        Move = 0,
+        Open,
+        Close,
+        Workspace,
+    };
+
+    struct AnimParams
+    {
+        bool on                   = false;
+        int duration_ms           = 0;
+        muwm::EasingFunction ease = muwm::easing::out_cubic;
+        AnimStyle style           = AnimStyle::None;
+    };
 
     bool ok() const
     {
@@ -143,7 +160,9 @@ public:
         ChangeKeyboard  = 1 << 3, // keymap, repeat rate
         ChangeWorkspace = 1 << 4, // workspaces name / count
         ChangeCursor    = 1 << 5, // cursor theme / size
+        ChangeAnimation = 1 << 6, // animation enabled / duration
     };
+
     void scheduleApply(int changes);
 
     // Settings are applied to a device when it appears and again, to every
@@ -219,6 +238,9 @@ public:
         return m_securityContext;
     }
     Toplevel *toplevelById(uint64_t id);
+    void scheduleFrames();
+    bool tickAnimations(int64_t now);
+    void animateClose(Toplevel *t);
 
 private:
     bool init();
@@ -472,6 +494,10 @@ private:
     bool m_bellResolved = false;
 
     std::vector<GestureBinding> m_gestures;
-
+    std::vector<std::unique_ptr<ClosingWindow>> m_closingWindows;
     SwipeState m_swipe;
+
+    // The effective settings for one kind: per-kind spec merged with the
+    // global switch and default duration.
+    AnimParams animParams(AnimKind k) const;
 };

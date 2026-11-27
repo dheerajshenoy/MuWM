@@ -1,5 +1,6 @@
 #include "MuWM.hpp"
 
+#include "ClosingWindow.hpp"
 #include "Decoration.hpp"
 #include "Dialog.hpp"
 #include "IdleInhibitor.hpp"
@@ -25,6 +26,80 @@
 
 namespace
 {
+
+static muwm::EasingFunction
+easingFor(Easing e)
+{
+    switch (e)
+    {
+        case Easing::Linear:
+            return muwm::easing::linear;
+        case Easing::InOutCubic:
+            return muwm::easing::in_out_cubic;
+        case Easing::OutCubic:
+            break;
+    }
+    return muwm::easing::out_cubic;
+}
+
+// Copy every visible buffer and rect under `node` into cw->tree, flattened,
+// with coordinates relative to the window's top-left.
+static void
+snapshotNode(ClosingWindow *cw, wlr_scene_node *node, int x, int y)
+{
+    if (!node->enabled)
+        return;
+    x += node->x;
+    y += node->y;
+
+    switch (node->type)
+    {
+        case WLR_SCENE_NODE_TREE:
+        {
+            wlr_scene_node *child;
+            wl_list_for_each(child, &wlr_scene_tree_from_node(node)->children,
+                             link) snapshotNode(cw, child, x, y);
+            break;
+        }
+        case WLR_SCENE_NODE_RECT:
+        {
+            auto *src = wlr_scene_rect_from_node(node);
+            auto *dst = wlr_scene_rect_create(cw->tree, src->width, src->height,
+                                              src->color);
+            wlr_scene_node_set_position(&dst->node, x, y);
+            ClosingWindow::Item it{&dst->node, {x, y, src->width, src->height}};
+            std::copy(src->color, src->color + 4, it.color.begin());
+            it.isRect = true;
+            cw->items.push_back(it);
+            break;
+        }
+        case WLR_SCENE_NODE_BUFFER:
+        {
+            auto *src = wlr_scene_buffer_from_node(node);
+            if (!src->buffer)
+                return;
+            // wlr_scene_buffer_create locks the buffer, so it survives the
+            // client.
+            auto *dst = wlr_scene_buffer_create(cw->tree, src->buffer);
+            wlr_scene_buffer_set_source_box(dst, &src->src_box);
+            wlr_scene_buffer_set_transform(dst, src->transform);
+            const int w = src->dst_width ? src->dst_width : src->buffer->width;
+            const int h
+                = src->dst_height ? src->dst_height : src->buffer->height;
+            wlr_scene_buffer_set_dest_size(dst, w, h);
+            wlr_scene_buffer_set_opacity(dst, src->opacity);
+            wlr_scene_node_set_position(&dst->node, x, y);
+            ClosingWindow::Item it{&dst->node, {x, y, w, h}};
+            it.opacity = src->opacity;
+            cw->items.push_back(it);
+            break;
+        }
+        case WLR_SCENE_NODE_SHADOW:
+        case WLR_SCENE_NODE_OPTIMIZED_BLUR:
+        case WLR_SCENE_NODE_BLUR:
+            break;
+    }
+}
 
 static libinput_config_accel_profile
 accelProfileFromString(const std::string &name)
@@ -774,17 +849,19 @@ MuWM::onNewToplevel(void *data)
 void
 MuWM::handleNewToplevel(wlr_xdg_toplevel *xdg)
 {
-    auto *t         = new Toplevel{};
-    t->wm           = this;
-    t->xdg          = xdg;
-    t->tree         = wlr_scene_tree_create(m_windowTree);
-    t->surfaceTree  = wlr_scene_xdg_surface_create(t->tree, xdg->base);
-    xdg->base->data = t->surfaceTree; // popups look their parent's tree up here
-    t->id           = m_globalTopLevelId++;
+    auto *t = new Toplevel{};
+    t->wm   = this;
+    t->xdg  = xdg;
+    t->tree = wlr_scene_tree_create(m_windowTree);
 
+    // Borders first
     for (auto &r : t->border)
         r = wlr_scene_rect_create(t->tree, 1, 1,
                                   m_config.border.unfocused_color);
+
+    t->surfaceTree  = wlr_scene_xdg_surface_create(t->tree, xdg->base);
+    xdg->base->data = t->surfaceTree; // popups look their parent's tree up here
+    t->id           = m_globalTopLevelId++;
 
     t->map.bind<&Toplevel::onMap>(&xdg->base->surface->events.map, t);
     t->commit.bind<&Toplevel::onCommit>(&xdg->base->surface->events.commit, t);
@@ -1406,11 +1483,13 @@ MuWM::arrange(Workspace *ws)
     if (area.width <= 0 || toplevels.empty())
         return;
 
-    auto place = [](Toplevel *t, int x, int y, int w, int h, bool borders)
+    auto place =
+        [](Toplevel *t, int x, int y, int w, int h, bool borders, bool animate)
     {
         t->clampSize(w, h);
         t->slot = {x, y, w, h};
-        wlr_scene_node_set_position(&t->tree->node, x, y);
+        t->moveTo(x, y, animate);
+        // wlr_scene_node_set_position(&t->tree->node, x, y);
         t->setSize(w, h);
         t->setBordersVisible(borders);
         if (borders)
@@ -1428,7 +1507,7 @@ MuWM::arrange(Workspace *ws)
         wlr_output_layout_get_box(m_layout, ws->output->output, &full);
         const int bw = m_config.border.fullscreen ? m_config.border.width : 0;
         place(t, full.x + bw, full.y + bw, full.width - 2 * bw,
-              full.height - 2 * bw, bw > 0);
+              full.height - 2 * bw, bw > 0, m_config.animation.enabled);
         wlr_scene_node_raise_to_top(&t->tree->node);
         return;
     }
@@ -1471,7 +1550,8 @@ MuWM::arrange(Workspace *ws)
 
     if (n == 1)
     {
-        place(tiled[0], area.x, area.y, area.width, area.height, borders);
+        place(tiled[0], area.x, area.y, area.width, area.height, borders,
+              m_config.animation.enabled);
         return;
     }
 
@@ -1480,7 +1560,8 @@ MuWM::arrange(Workspace *ws)
           * (ws->masterRatio >= 0.0f ? ws->masterRatio
                                      : m_config.layout.master_ratio);
     const int stackW = area.width - gap - masterW;
-    place(tiled[0], area.x, area.y, masterW, area.height, borders);
+    place(tiled[0], area.x, area.y, masterW, area.height, borders,
+          m_config.animation.enabled);
 
     // Integer division would leave the remainder as empty space under the
     // stack, so hand one extra pixel to each of the first `rem` windows.
@@ -1492,7 +1573,8 @@ MuWM::arrange(Workspace *ws)
     for (int i = 1; i < n; i++)
     {
         const int hi = h + (i - 1 < rem ? 1 : 0);
-        place(tiled[i], area.x + masterW + gap, y, stackW, hi, borders);
+        place(tiled[i], area.x + masterW + gap, y, stackW, hi, borders,
+              m_config.animation.enabled);
         y += hi + gap;
     }
 }
@@ -2034,6 +2116,13 @@ MuWM::scheduleApply(int changes)
 }
 
 void
+MuWM::scheduleFrames()
+{
+    for (Output *o : m_outputs)
+        wlr_output_schedule_frame(o->output);
+}
+
+void
 MuWM::applyPending()
 {
     const int changes = m_pendingChanges;
@@ -2459,8 +2548,38 @@ MuWM::switchWorkspace(Output *out, Workspace *ws_target)
         old->setFocused(false);
     }
 
-    wlr_scene_node_set_enabled(&ws_old->sceneTree->node, false);
+    // wlr_scene_node_set_enabled(&ws_old->sceneTree->node, false);
     wlr_scene_node_set_enabled(&ws_target->sceneTree->node, true);
+
+    if (m_config.animation.enabled)
+    {
+        wlr_box box;
+        wlr_output_layout_get_box(m_layout, out->output, &box);
+        const int dir      = ws_old->slot < ws_target->slot ? 1 : -1;
+        const int dur      = m_config.animation.duration_ms;
+        const uint64_t now = muwm::now_ms();
+
+        ws_old->slideX.start(ws_old->slideX.value(now), -dir * box.width, dur,
+                             now);
+
+        const double from = ws_target->slideX.running()
+                                ? ws_target->slideX.value(now)
+                                : static_cast<double>(dir * box.width);
+        ws_target->slideX.start(from, 0, dur, now);
+        wlr_scene_node_set_position(&ws_target->sceneTree->node,
+                                    std::lround(from), 0);
+        scheduleFrames();
+    }
+    else
+    {
+        wlr_scene_node_set_enabled(&ws_old->sceneTree->node, false);
+        for (Workspace *ws : {ws_old, ws_target})
+        {
+            ws->slideX.set(0);
+            wlr_scene_node_set_position(&ws->sceneTree->node, 0, 0);
+        }
+    }
+
     out->workspace = ws_target;
 
     // Move sticky windows to the new workspace
@@ -2689,7 +2808,8 @@ MuWM::placeFloating(Toplevel *t)
     wlr_box &b = t->floatBox;
     t->clampSize(b.width, b.height);
     t->slot = b;
-    wlr_scene_node_set_position(&t->tree->node, b.x, b.y);
+    t->moveTo(b.x, b.y, m_config.animation.enabled);
+    // wlr_scene_node_set_position(&t->tree->node, b.x, b.y);
     t->setSize(b.width, b.height);
     t->setBordersVisible(true);
     t->fitBorders();
@@ -4156,4 +4276,134 @@ MuWM::onHoldEnd(void *data)
     auto *ev = static_cast<wlr_pointer_hold_end_event *>(data);
     wlr_pointer_gestures_v1_send_hold_end(m_pointerGestures, m_seat,
                                           ev->time_msec, ev->cancelled);
+}
+
+// MuWM: returns true if anything is still moving
+bool
+MuWM::tickAnimations(int64_t now)
+{
+    bool running = false;
+    bool slidOut = false;
+
+    auto toplevels
+        = workspaceAt(m_focusedOutput, m_focusedOutput->workspace->slot)
+              ->toplevels;
+
+    for (Output *o : m_outputs)
+    {
+        for (Workspace *ws : o->workspaces)
+        {
+            if (ws->slideX.running())
+            {
+                const double x = ws->slideX.value(now);
+                wlr_scene_node_set_position(&ws->sceneTree->node,
+                                            std::lround(x), 0);
+                if (ws->slideX.running())
+                    running = true;
+                else if (ws != o->workspace) // finished sliding out
+                {
+                    wlr_scene_node_set_enabled(&ws->sceneTree->node, false);
+                    wlr_scene_node_set_position(&ws->sceneTree->node, 0, 0);
+                    ws->slideX.set(0);
+                    slidOut = true;
+                }
+            }
+
+            for (Toplevel *t : ws->toplevels)
+                if (t->animX.running() || t->animY.running())
+                    running |= t->tickMove(now);
+        }
+    }
+
+    if (slidOut)
+        refreshPointerFocus(); // old windows are not longer under cursor
+
+    for (auto it = m_closingWindows.begin(); it != m_closingWindows.end();)
+    {
+        ClosingWindow &cw = **it;
+        const double p    = cw.anim.value(now); // 1 → 0
+        if (!cw.anim.running())
+        {
+            wlr_scene_node_destroy(&cw.tree->node); // drops the buffer locks
+            it = m_closingWindows.erase(it);
+            continue;
+        }
+
+        // zoom: shrink to 90%; slide: drift 40px down; fade: neither
+        const double s  = cw.style == AnimStyle::Zoom ? 0.9 + 0.1 * p : 1.0;
+        const int dy    = cw.style == AnimStyle::Slide
+                              ? int(std::lround(40.0 * (1.0 - p)))
+                              : 0;
+        const double cx = cw.w / 2.0, cy = cw.h / 2.0;
+        for (const auto &i : cw.items)
+        {
+            const int x = int(std::lround(cx + (i.box.x - cx) * s));
+            const int y = int(std::lround(cy + (i.box.y - cy) * s)) + dy;
+            const int w = std::max(1, int(std::lround(i.box.width * s)));
+            const int h = std::max(1, int(std::lround(i.box.height * s)));
+            wlr_scene_node_set_position(i.node, x, y);
+
+            if (i.isRect)
+            {
+                auto *r = wlr_scene_rect_from_node(i.node);
+                float c[4];
+                for (int k = 0; k < 4; k++)
+                    c[k] = i.color[k] * float(p); // premultiplied alpha
+                wlr_scene_rect_set_size(r, w, h);
+                wlr_scene_rect_set_color(r, c);
+            }
+            else
+            {
+                auto *b = wlr_scene_buffer_from_node(i.node);
+                wlr_scene_buffer_set_dest_size(b, w, h);
+                wlr_scene_buffer_set_opacity(b, i.opacity * float(p));
+            }
+        }
+        running = true;
+        ++it;
+    }
+
+    return running;
+}
+
+void
+MuWM::animateClose(Toplevel *t)
+{
+    int lx, ly;
+    const AnimParams ap = animParams(AnimKind::Close);
+    // false if the window or any parent (e.g. its workspace) is hidden
+    if (!ap.on || ap.style == AnimStyle::None
+        || !wlr_scene_node_coords(&t->tree->node, &lx, &ly))
+        return;
+
+    auto cw   = std::make_unique<ClosingWindow>();
+    cw->tree  = wlr_scene_tree_create(m_windowTree);
+    cw->w     = t->slot.width;
+    cw->h     = t->slot.height;
+    cw->style = ap.style;
+    wlr_scene_node_set_position(&cw->tree->node, lx, ly);
+
+    wlr_scene_node *child;
+    wl_list_for_each(child, &t->tree->children, link)
+        snapshotNode(cw.get(), child, 0, 0);
+
+    cw->anim.start(1.0, 0.0, ap.duration_ms, muwm::now_ms(), ap.ease);
+    m_closingWindows.push_back(std::move(cw));
+    scheduleFrames();
+}
+
+MuWM::AnimParams
+MuWM::animParams(AnimKind k) const
+{
+    const auto &a     = m_config.animation;
+    const AnimSpec &s = k == AnimKind::Move    ? a.move
+                        : k == AnimKind::Open  ? a.open
+                        : k == AnimKind::Close ? a.close
+                                               : a.workspace;
+    AnimParams p;
+    p.duration_ms = s.duration_ms >= 0 ? s.duration_ms : a.duration_ms;
+    p.ease        = easingFor(s.curve);
+    p.style       = s.style;
+    p.on          = a.enabled && s.enabled && p.duration_ms > 0;
+    return p;
 }

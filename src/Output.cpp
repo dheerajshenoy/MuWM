@@ -5,6 +5,10 @@
 void
 Output::onFrame(void *)
 {
+    // Move animated windows to where they should be *now*. This damages the
+    // scene, so needs_frame() below sees the change and renders it.
+    const bool animating = wm->tickAnimations(muwm::now_ms());
+
     if (wlr_scene_output_needs_frame(sceneOutput))
     {
         wlr_output_state state;
@@ -28,6 +32,10 @@ Output::onFrame(void *)
     timespec now;
     clock_gettime(CLOCK_MONOTONIC, &now);
     wlr_scene_output_send_frame_done(sceneOutput, &now);
+
+    // Keep frames coming until every animation has finished, then go idle.
+    if (animating)
+        wlr_output_schedule_frame(output);
 }
 
 void

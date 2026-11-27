@@ -2,6 +2,49 @@
 
 ## 0.1.2
 
+### Animations
+- Windows slide to their new place when the layout changes, slide in when
+  they open and fade out when they close. Workspace switches slide
+  horizontally, in the direction of the workspace order.
+- `mu.config.animation.enabled` and `duration` set the defaults. `move`,
+  `open`, `close` and `workspace` each take `enabled`, `duration`, `curve`
+  (`linear`, `out_cubic`, `in_out_cubic`) and `style` (`none`, `slide`,
+  `fade`, `zoom`; open and close only).
+- So far only close animations read their own settings; move, open and
+  workspace animations still use the global `enabled` and `duration`.
+
+### Lua configuration
+- `mu.gesture("swipe3+left", action)` binds touchpad swipes. A swipe runs its
+  action once the fingers move `gestures.swipe_threshold`.
+- `mu.config.mouse` has `accel_profile` and `accel_speed`.
+- `mu.config.bell_sound` picks the sound for the system bell.
+- `border.sticky` colors the bottom and right edges of sticky windows.
+- `muwm --check-config` loads the config, reports errors and exits.
+- Default bindings: Super+J/K focus the next/previous window, Super+Shift+J/K
+  swap them, Super+N shows workspace N, Super+Shift+N sends the focused
+  window there, and Super+Shift+R reloads the config. Config bindings for
+  the same keys replace them.
+- The LuaLS stubs type-check `mu.config { ... }` calls, so a wrong option
+  value is flagged in the editor.
+
+### Windows and workspaces
+- Sticky windows (`window.sticky`) follow workspace switches on their output.
+- The xdg-system-bell protocol plays the bell with `pw-play`. A bell from a
+  window on a hidden workspace marks that workspace urgent.
+
+### Input
+- Mice get acceleration, left-handed and rotation settings. Touchpads get
+  acceleration, left-handed, clickfinger, 3-finger drag, drag lock and
+  button map settings. A keyboard can load a keymap file.
+- Swipe and hold gestures are forwarded to clients.
+
+### Build
+- `-DWANT_SCENEFX=ON` builds against scenefx instead of the wlroots scene
+  graph. Off by default.
+
+### Fixes
+- Fixed assertions on exit caused by listeners that were never unbound.
+
 ## 0.1.1
 
 ### Lua configuration
