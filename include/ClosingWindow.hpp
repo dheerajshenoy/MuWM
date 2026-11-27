@@ -12,6 +12,10 @@ struct ClosingWindow
         std::array<float, 4> color{}; // rects only
         float opacity = 1.0f;         // buffers only
         bool isRect   = false;
+#ifdef MUWM_HAS_SCENEFX
+        fx_corner_radii corners{}; // rects and buffers
+        clipped_region clip{};     // rects only; relative to the rect
+#endif
     };
 
     wlr_scene_tree *tree = nullptr;

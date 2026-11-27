@@ -70,6 +70,14 @@ snapshotNode(ClosingWindow *cw, wlr_scene_node *node, int x, int y)
             ClosingWindow::Item it{&dst->node, {x, y, src->width, src->height}};
             std::copy(src->color, src->color + 4, it.color.begin());
             it.isRect = true;
+#ifdef MUWM_HAS_SCENEFX
+            // The border frame is one rect with the window cut out; without
+            // these the copy is a solid slab.
+            it.corners = src->corners;
+            it.clip    = src->clipped_region;
+            wlr_scene_rect_set_corner_radii(dst, it.corners);
+            wlr_scene_rect_set_clipped_region(dst, it.clip);
+#endif
             cw->items.push_back(it);
             break;
         }
@@ -91,6 +99,10 @@ snapshotNode(ClosingWindow *cw, wlr_scene_node *node, int x, int y)
             wlr_scene_node_set_position(&dst->node, x, y);
             ClosingWindow::Item it{&dst->node, {x, y, w, h}};
             it.opacity = src->opacity;
+#ifdef MUWM_HAS_SCENEFX
+            it.corners = src->corners;
+            wlr_scene_buffer_set_corner_radii(dst, it.corners);
+#endif
             cw->items.push_back(it);
             break;
         }
@@ -4398,6 +4410,15 @@ MuWM::tickAnimations(int64_t now)
                               ? int(std::lround(40.0 * (1.0 - p)))
                               : 0;
         const double cx = cw.w / 2.0, cy = cw.h / 2.0;
+#ifdef MUWM_HAS_SCENEFX
+        auto scaleRadii = [s](fx_corner_radii c)
+        {
+            return corner_radii_new(int(std::lround(c.top_left * s)),
+                                    int(std::lround(c.top_right * s)),
+                                    int(std::lround(c.bottom_right * s)),
+                                    int(std::lround(c.bottom_left * s)));
+        };
+#endif
         for (const auto &i : cw.items)
         {
             const int x = int(std::lround(cx + (i.box.x - cx) * s));
@@ -4414,12 +4435,29 @@ MuWM::tickAnimations(int64_t now)
                     c[k] = i.color[k] * float(p); // premultiplied alpha
                 wlr_scene_rect_set_size(r, w, h);
                 wlr_scene_rect_set_color(r, c);
+#ifdef MUWM_HAS_SCENEFX
+                if (cw.style == AnimStyle::Zoom)
+                {
+                    const wlr_box &a = i.clip.area;
+                    wlr_scene_rect_set_corner_radii(r, scaleRadii(i.corners));
+                    wlr_scene_rect_set_clipped_region(
+                        r, {.area    = {int(std::lround(a.x * s)),
+                                        int(std::lround(a.y * s)),
+                                        int(std::lround(a.width * s)),
+                                        int(std::lround(a.height * s))},
+                            .corners = scaleRadii(i.clip.corners)});
+                }
+#endif
             }
             else
             {
                 auto *b = wlr_scene_buffer_from_node(i.node);
                 wlr_scene_buffer_set_dest_size(b, w, h);
                 wlr_scene_buffer_set_opacity(b, i.opacity * float(p));
+#ifdef MUWM_HAS_SCENEFX
+                if (cw.style == AnimStyle::Zoom)
+                    wlr_scene_buffer_set_corner_radii(b, scaleRadii(i.corners));
+#endif
             }
         }
         running = true;
